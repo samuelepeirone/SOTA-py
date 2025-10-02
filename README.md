@@ -56,6 +56,7 @@ SOTA matrix:
 | $i=2$ | $u_2(0)$ |                 |               |     |
 | ...   |          |                 |               |     |
 | $i=d$ | 1        | 1               | 1             | 1   |
+
 I need to discretize time: I would discretize it based on the lower edge value in the graph. To do so we can lower-bound the sampled values of the gamma distribution.
 
 >[!note]
