@@ -4,7 +4,6 @@ import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 
-
 adjacency_matrix = np.array([
     [0, 4, 5, 9, 0, 0, 0, 0, 0],
     [0, 0, 5, 0, 5, 4, 0, 0, 0],

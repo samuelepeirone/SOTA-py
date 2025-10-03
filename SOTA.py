@@ -12,8 +12,15 @@ class SOTA(ABC):
         self.time_budget = time_budget
         self.num_nodes = graph.get_num_nodes()
         self.min_edge = graph.min_edge
+
+        self.sota_matrix = self.initialize_matrix()
+        # -1 indicates no policy set
+        self.policy_matrix = -1 * np.ones((self.num_nodes, self.time_budget+1), dtype=int)
     
     def initialize_matrix(self):
+        """
+        Initialize the SOTA matrix with zeros and set the destination node row to 1s.
+        """
         n_rows = self.graph.get_num_nodes()
         n_cols = math.ceil(self.time_budget / self.min_edge) + 1
         
@@ -63,9 +70,9 @@ class SOTA(ABC):
         return self.policy_matrix
 
     @abstractmethod
-    def compute_convolution(self, node_i, node_j, t): 
+    def compute_convolution(self, node_i, node_j, t, matrix): 
         """ 
-        Discrete convolution for edge (node_i, node_j)
+        Discrete convolution for edge (node_i, node_j) in matrix at time t.
         @param:t: remaining time
         @return:m: convolution result
         """
@@ -73,7 +80,7 @@ class SOTA(ABC):
         for s in range(1, t+1):
             p = self.compute_density(node_i, node_j, s)
             if t - s >= 0:
-                m += p * self.sota_matrix[node_j, t - s]
+                m += p * matrix[node_j, t - s]
         return m
 
     @abstractmethod
@@ -127,12 +134,8 @@ class StandardSOTASolver(SOTA):
 
         super().__init__(graph, node_s, node_d, time_budget)
 
-        self.sota_matrix = self.initialize_matrix()
-        # -1 indicates no policy set
-        self.policy_matrix = -1 * np.ones((self.num_nodes, self.time_budget+1), dtype=int)
-    
     def compute_convolution(self, node_i, node_j, t):
-        return super().compute_convolution(node_i, node_j, t)
+        return super().compute_convolution(node_i, node_j, t, self.sota_matrix)
 
     def update_node(self, node_i):
         """
@@ -197,16 +200,8 @@ class SingleIterationSOTASolver(SOTA):
     def __init__(self, graph, node_s, node_d, time_budget):
         super().__init__(graph, node_s, node_d, time_budget)
 
-        self.sota_matrix = self.initialize_matrix()
-        self.policy_matrix = -1 * np.ones((self.num_nodes, self.time_budget+1), dtype=int)
-    
     def compute_convolution(self, node_i, node_j, t, prev_sota_matrix):
-        m = 0.0
-        for s in range(1, t + 1):
-            p = self.compute_density(node_i, node_j, s)
-            if t - s >= 0:
-                m += p * prev_sota_matrix[node_j, t - s]
-        return m
+        return super().compute_convolution(node_i, node_j, t, prev_sota_matrix)
 
     def update_node(self, node_i, t, prev_sota_matrix):
         """
