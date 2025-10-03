@@ -5,9 +5,8 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 class SOTA(ABC):
-    def __init__(self, graph, node_s, node_d, time_budget):
+    def __init__(self, graph, node_d, time_budget):
         self.graph = graph
-        self.node_s = node_s
         self.node_d = node_d
         self.time_budget = time_budget
         self.num_nodes = graph.get_num_nodes()
@@ -96,13 +95,11 @@ class SOTA(ABC):
         pass
 
     @abstractmethod
-    def extract_path(self):
+    def extract_path(self, start_node):
         """
         Extracts the optimal path using only the policy row and the last column.
         @return: list of nodes representing the optimal path from source to destination
         """
-        start_node = self.node_s
-
         path = [int(start_node)]
         current_node = start_node
         # starting from the last column (maximum time budget)
@@ -123,7 +120,7 @@ class SOTA(ABC):
         return path
 
 class StandardSOTASolver(SOTA):
-    def __init__(self, graph, node_s, node_d, time_budget):
+    def __init__(self, graph, node_d, time_budget):
         """
         @param graph: StochasticGraph instance
         @param node_s: source node index
@@ -132,7 +129,7 @@ class StandardSOTASolver(SOTA):
         Initializes the Standard SOTA Solver with the given graph, source and destination nodes, and time budget.
         """
 
-        super().__init__(graph, node_s, node_d, time_budget)
+        super().__init__(graph, node_d, time_budget)
 
     def compute_convolution(self, node_i, node_j, t):
         return super().compute_convolution(node_i, node_j, t, self.sota_matrix)
@@ -193,12 +190,12 @@ class StandardSOTASolver(SOTA):
                 break
         return self.sota_matrix
     
-    def extract_path(self):
-        return super().extract_path()
+    def extract_path(self, node_s):
+        return super().extract_path(node_s)
     
 class SingleIterationSOTASolver(SOTA):
-    def __init__(self, graph, node_s, node_d, time_budget):
-        super().__init__(graph, node_s, node_d, time_budget)
+    def __init__(self, graph, node_d, time_budget):
+        super().__init__(graph, node_d, time_budget)
 
     def compute_convolution(self, node_i, node_j, t, prev_sota_matrix):
         return super().compute_convolution(node_i, node_j, t, prev_sota_matrix)
@@ -264,5 +261,5 @@ class SingleIterationSOTASolver(SOTA):
         for k in range(1, L + 1):
             self.update_sota(k)
 
-    def extract_path(self):
-        return super().extract_path()
+    def extract_path(self, node_s):
+        return super().extract_path(node_s)
