@@ -52,8 +52,33 @@ class StochasticGraph:
             print(" ".join(f"{val:.2f}" for val in row))
         print()
 
-    def print_graph(self):
+    def print_graph_all_nodes(self):
+        """
+        Simple displaying of the graph
+        """
         G = nx.from_numpy_array(self.adjacency_matrix, create_using=nx.DiGraph)
+        pos = nx.spring_layout(G)
+        nx.draw(G, pos, with_labels=True, node_color='lightblue', edge_color='gray', arrows=True)
+        edge_labels = nx.get_edge_attributes(G, 'weight')
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+        plt.show()
+
+    def print_graph(self):
+        """
+        Dislaying the graph without isolated nodes. Nodes without incoming or outgoing edges are ignored.
+        """
+        # looks for active nodes (at least one incoming or outgoing edge)
+        active_nodes = np.where(self.adjacency_matrix.sum(axis=0) + self.adjacency_matrix.sum(axis=1) > 0)[0]
+        
+        # creates a new matrix with only active nodes and then the graph
+        reduced_matrix = self.adjacency_matrix[np.ix_(active_nodes, active_nodes)]
+        
+        G = nx.from_numpy_array(reduced_matrix, create_using=nx.DiGraph)
+        
+        # renames with original node indices
+        mapping = {i: active_nodes[i] for i in range(len(active_nodes))}
+        G = nx.relabel_nodes(G, mapping)
+        
         pos = nx.spring_layout(G)
         nx.draw(G, pos, with_labels=True, node_color='lightblue', edge_color='gray', arrows=True)
         edge_labels = nx.get_edge_attributes(G, 'weight')
@@ -127,3 +152,21 @@ class StochasticGraph:
                 successors.append(j)
         return successors
         
+    def prune_node(self, node):
+        """
+        Removes a node from the graph and all associated edges by setting
+        the adjacency and variance matrix rows and columns to zero.
+        Non-disruptive pruning, as the index are maintained.
+        """
+        if node < 0 or node >= self.num_nodes:
+            raise ValueError("Node index out of bounds")
+
+        # removing corresponding row and columm in both adjacency and variance matrices
+        self.adjacency_matrix[:, node] = 0
+        self.adjacency_matrix[node, :] = 0
+
+        self.variance_matrix[:, node] = 0
+        self.variance_matrix[node, :] = 0
+
+        # updating attributes
+        self.min_edge = self.find_min_edge()

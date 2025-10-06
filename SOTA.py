@@ -67,6 +67,16 @@ class SOTA(ABC):
     
     def get_policy_matrix(self):
         return self.policy_matrix
+    
+    def get_destination(self):
+        return self.node_d
+    
+    def set_destination(self, node_d):
+        """
+        Sets the new destination node and re-initializes the SOTA matrix.
+        """
+        self.node_d = node_d
+        self.sota_matrix = self.initialize_matrix()
 
     @abstractmethod
     def compute_convolution(self, node_i, node_j, t, matrix): 
@@ -94,16 +104,13 @@ class SOTA(ABC):
     def solve(self, eps=1e-4, max_iter=100):
         pass
 
-    @abstractmethod
-    def extract_path(self, start_node):
+    def extract_path_from_time(self, start_node, t_idx):
         """
-        Extracts the optimal path using only the policy row and the last column.
+        Extracts the optimal path for current time whatching the policy row.
         @return: list of nodes representing the optimal path from source to destination
         """
         path = [int(start_node)]
         current_node = start_node
-        # starting from the last column (maximum time budget)
-        t_idx = self.time_budget
 
         while True:
             next_node = self.policy_matrix[current_node, t_idx]
@@ -118,6 +125,14 @@ class SOTA(ABC):
             t_idx -= 1  # decrease time index by 1
 
         return path
+
+    @abstractmethod
+    def extract_path(self, start_node):
+        """
+        Extracts the optimal path using only the policy row and the last column.
+        @return: list of nodes representing the optimal path from source to destination
+        """
+        return self.extract_path_from_time(start_node, self.time_budget)
 
 class StandardSOTASolver(SOTA):
     def __init__(self, graph, node_d, time_budget):

@@ -1,13 +1,16 @@
 from stochastic_graph import StochasticGraph
 from SOTA import StandardSOTASolver, SingleIterationSOTASolver
+from preprocessing import Reach
 
 def main():
     graph = StochasticGraph()
     sota = SingleIterationSOTASolver(graph, 8, 10)
+    sota.set_destination(6)
+    reach = Reach(graph, 10, sota)
+    reach.reach_computation()
+    reach.reach_pruning()
     sota.solve()
-    sota.print_sota_matrix()
-    sota.print_policy_matrix()
-    print("Optimal path (minimal extraction):", sota.extract_path(2))
+    print(sota.extract_path(1))
 
 if __name__ == "__main__":
     main()
