@@ -71,6 +71,9 @@ class SOTA(ABC):
     def get_destination(self):
         return self.node_d
     
+    def get_time_budget(self):
+        return self.time_budget
+    
     def set_destination(self, node_d):
         """
         Sets the new destination node and re-initializes the SOTA matrix.

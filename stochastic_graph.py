@@ -3,6 +3,8 @@ import networkx as nx
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import matplotlib.patches as mpatches
 
 adjacency_matrix = np.array([
     [0, 4, 5, 9, 0, 0, 0, 0, 0],
@@ -85,6 +87,48 @@ class StochasticGraph:
         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
         plt.show()
 
+    def print_graph_sections(self, node_sections=None):
+        """
+        Displaying the graph with nodes colored based on their sections if provided.
+        """
+        # finds active nodes
+        active_nodes = np.where(self.adjacency_matrix.sum(axis=0) + self.adjacency_matrix.sum(axis=1) > 0)[0]
+        reduced_matrix = self.adjacency_matrix[np.ix_(active_nodes, active_nodes)]
+
+        # creates the graph
+        G = nx.from_numpy_array(reduced_matrix, create_using=nx.DiGraph)
+        mapping = {i: active_nodes[i] for i in range(len(active_nodes))}
+        G = nx.relabel_nodes(G, mapping)
+
+        pos = nx.spring_layout(G, seed=42)
+
+        # color nodes based on sections if provided
+        if node_sections is not None:
+            unique_sections = sorted(set(node_sections.values()))
+            color_map = cm.get_cmap('tab10', len(unique_sections))
+
+            node_colors = [
+                color_map(unique_sections.index(node_sections[n])) if n in node_sections else (0.8, 0.8, 0.8, 1.0)
+                for n in G.nodes()
+            ]
+        else:
+            node_colors = 'lightblue'
+
+        # graph drawing
+        nx.draw(G, pos, with_labels=True, node_color=node_colors, edge_color='gray', arrows=True)
+        edge_labels = nx.get_edge_attributes(G, 'weight')
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+
+        # legenda
+        if node_sections is not None:
+            legend_handles = [
+                mpatches.Patch(color=color_map(i), label=f'Section {unique_sections[i]}')
+                for i in range(len(unique_sections))
+            ]
+            plt.legend(handles=legend_handles, title="Sections")
+
+        plt.show()
+
     def find_min_edge(self):
         """
         Find the minimum edge in the adjacency matrix.
@@ -117,6 +161,16 @@ class StochasticGraph:
         Returns number of nodes in the graph, calculated from the adjacency matrix.
         """
         return self.adjacency_matrix.shape[0]
+
+    def get_edges(self):
+        """
+        Returns a list of edges in the graph as (i, j) tuples.
+        """
+        edges = []
+        rows, cols = np.where(self.adjacency_matrix > 0)
+        for i, j in zip(rows, cols):
+            edges.append((i, j))
+        return edges
 
     def get_min_edge(self):
         return self.min_edge
@@ -169,4 +223,17 @@ class StochasticGraph:
         self.variance_matrix[node, :] = 0
 
         # updating attributes
+        self.min_edge = self.find_min_edge()
+    
+    def prune_edge(self, node_i, node_j):
+        """
+        Prune the edge in between node_i and node_j
+        """
+        for node in (node_i, node_j):
+            if node < 0 or node >= self.num_nodes:
+                raise ValueError("Node index out of bounds")
+        
+        self.adjacency_matrix[node_i, node_j] = 0
+        self.variance_matrix[node_i, node_j] = 0
+
         self.min_edge = self.find_min_edge()
