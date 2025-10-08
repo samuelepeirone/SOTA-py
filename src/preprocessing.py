@@ -13,6 +13,8 @@ class Reach:
         self.SOTASolver = SOTASolver
         self.time_budget = SOTASolver.get_time_budget()
         self.num_nodes = graph.get_num_nodes()
+        self.min_edge = graph.get_min_edge()
+        self.num_cols = SOTASolver.get_num_cols()
         # array of reach values; initializing all reach values to zero
         self.reach_values = np.zeros(self.num_nodes)
         # m_id and m_si cache, as they are used multiple times
@@ -42,7 +44,7 @@ class Reach:
         """
         visited = set()
 
-        for t in range(1, self.time_budget + 1):
+        for t in range(0, self.num_cols-1):
             path = self.SOTASolver.extract_path_from_time(start_node, t)
             # if the path exists and 
             if path and path[-1] == dest_node:
@@ -200,7 +202,7 @@ class ArcFlags:
         
         return relevant_edges
     
-    def compute_arcflags(self):
+    def arcflags_computation(self):
         """
         Computes the arc-flags for all edges and all regions.
         """

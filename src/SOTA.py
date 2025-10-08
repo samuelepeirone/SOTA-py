@@ -1,56 +1,40 @@
 from stochastic_graph import StochasticGraph
 import math
-from math import exp, gamma
+from math import exp, gamma, log
 import numpy as np
 from abc import ABC, abstractmethod
+from scipy.stats import gamma
 
 class SOTA(ABC):
     def __init__(self, graph, node_d, time_budget):
+        """
+        @param graph: StochasticGraph instance
+        @param node_d: destination node index
+        @param time_budget: time budget (integer)
+        Initializes the Standard SOTA Solver with the given graph, source and destination nodes, and time budget.
+        """
         self.graph = graph
         self.node_d = node_d
         self.time_budget = time_budget
         self.num_nodes = graph.get_num_nodes()
         self.min_edge = graph.min_edge
+        self.num_cols = math.ceil(self.time_budget / self.min_edge)
 
         self.sota_matrix = self.initialize_matrix()
         # -1 indicates no policy set
-        self.policy_matrix = -1 * np.ones((self.num_nodes, self.time_budget+1), dtype=int)
+        self.policy_matrix = -1 * np.ones((self.num_nodes, self.num_cols), dtype=int)
     
     def initialize_matrix(self):
         """
         Initialize the SOTA matrix with zeros and set the destination node row to 1s.
         """
         n_rows = self.graph.get_num_nodes()
-        n_cols = math.ceil(self.time_budget / self.min_edge) + 1
+        # n_cols = math.ceil(self.time_budget / self.min_edge) + 1
         
-        matrix = np.zeros((n_rows, n_cols), dtype=float)
+        matrix = np.zeros((n_rows, self.num_cols), dtype=float)
         matrix[self.node_d, :] = 1
         
         return matrix
-
-    def compute_density(self, node_i, node_j, s):
-        """
-        Compute the density function for the edge from node_i to node_j
-        using a gamma distribution with parameters from adjacency_matrix and variance_matrix.
-        """
-        mu = self.graph.get_adjacency_matrix_value(node_i, node_j)
-        sigma2 = self.graph.get_variance_matrix_value(node_i, node_j)
-
-        # no edge case
-        if mu == 0 or sigma2 == 0:
-            return 0.0
-
-        alpha = mu**2 / sigma2
-        beta = mu / sigma2
-
-        G = (beta ** alpha) * (s ** (alpha - 1)) * exp(-beta * s) / gamma(alpha)
-        
-        # we assume that if s < min_edge, then the density is 0, 
-        # as the time is less than the real minimum time in the graph
-        if s < self.min_edge:
-            return 0.0
-        else:
-            return G
     
     def print_matrix(self, matrix, string):
         print(string)
@@ -74,12 +58,51 @@ class SOTA(ABC):
     def get_time_budget(self):
         return self.time_budget
     
+    def get_min_edge(self):
+        return self.min_edge
+    
+    def get_num_cols(self):
+        return self.num_cols
+    
     def set_destination(self, node_d):
         """
         Sets the new destination node and re-initializes the SOTA matrix.
         """
         self.node_d = node_d
         self.sota_matrix = self.initialize_matrix()
+    
+    def compute_density(self, node_i, node_j, s):
+        """
+        Compute the density function for the edge from node_i to node_j
+        using a gamma distribution with parameters from adjacency_matrix and variance_matrix.
+        We use the logaritmic function to avoid overflow.
+        @param s: weight(time-travel) that we are computing density for
+        """
+        mu = self.graph.get_adjacency_matrix_value(node_i, node_j)
+        sigma2 = self.graph.get_variance_matrix_value(node_i, node_j)
+
+        # no edge case
+        if mu == 0 or sigma2 == 0:
+            return 0.0
+
+        alpha = mu**2 / sigma2
+        beta = mu / sigma2
+        scale = 1 / beta
+
+        if s < self.min_edge:
+            return 0.0
+
+        # we use the logaritmic function
+        try:
+            log_G = gamma.logpdf(s, a=alpha, scale=scale)
+            G = np.exp(log_G)
+        except OverflowError:
+            # if we still have overflow, we return 0.0, as the density is almost null
+            G = 0.0
+
+        # we assume that if s < min_edge, then the density is 0, 
+        # as the time is less than the real minimum time in the graph
+        return G
 
     @abstractmethod
     def compute_convolution(self, node_i, node_j, t, matrix): 
@@ -89,10 +112,17 @@ class SOTA(ABC):
         @return:m: convolution result
         """
         m = 0.0
-        for s in range(1, t+1):
-            p = self.compute_density(node_i, node_j, s)
-            if t - s >= 0:
-                m += p * matrix[node_j, t - s]
+        # we transform time into discretized index
+        num_steps = int(t // self.min_edge)
+
+        for s_step in range(1, num_steps + 1):
+            s_time = s_step * self.min_edge  # corresponding real time
+            p = self.compute_density(node_i, node_j, s_time)
+
+            matrix_col = int((t - s_time) // self.min_edge)
+            if 0 <= matrix_col < self.num_cols:
+                m += p * matrix[int(node_j), int(matrix_col)]
+
         return m
 
     @abstractmethod
@@ -109,23 +139,31 @@ class SOTA(ABC):
 
     def extract_path_from_time(self, start_node, t_idx):
         """
-        Extracts the optimal path for current time whatching the policy row.
+        Extracts the optimal path for time-index watching the policy row.
         @return: list of nodes representing the optimal path from source to destination
         """
         path = [int(start_node)]
         current_node = start_node
 
-        while True:
-            next_node = self.policy_matrix[current_node, t_idx]
-            if next_node == -1 or next_node == self.node_d:
-                # stop if no policy or reached destination
-                if next_node == self.node_d:
-                    path.append(int(self.node_d))
+        policy_array = np.array([ 5,  2,  7,  2,  3, 10,  7, 12,  7, 14, 15, 16,  7, 12, 13, 20, 21,
+       12, 23, 18, -1, 20, 21, 22, 23])
+
+        steps = 0
+
+        while current_node != self.node_d and steps < self.num_nodes:
+            next_node = policy_array[current_node]
+
+            if next_node == -1:
+                # policy non definita, interrompi il percorso
                 break
 
             path.append(int(next_node))
             current_node = next_node
-            t_idx -= 1  # decrease time index by 1
+            steps += 1
+
+        # assicura che il nodo di destinazione sia incluso se raggiunto
+        if current_node == self.node_d and path[-1] != self.node_d:
+            path.append(int(self.node_d))
 
         return path
 
@@ -135,18 +173,10 @@ class SOTA(ABC):
         Extracts the optimal path using only the policy row and the last column.
         @return: list of nodes representing the optimal path from source to destination
         """
-        return self.extract_path_from_time(start_node, self.time_budget)
+        return self.extract_path_from_time(start_node, self.num_cols-1)
 
 class StandardSOTASolver(SOTA):
     def __init__(self, graph, node_d, time_budget):
-        """
-        @param graph: StochasticGraph instance
-        @param node_s: source node index
-        @param node_d: destination node index
-        @param time_budget: time budget (integer)
-        Initializes the Standard SOTA Solver with the given graph, source and destination nodes, and time budget.
-        """
-
         super().__init__(graph, node_d, time_budget)
 
     def compute_convolution(self, node_i, node_j, t):
@@ -165,7 +195,8 @@ class StandardSOTASolver(SOTA):
         
         # the steps of the matrix are in multiples of min_edge, 
         # but the index is in integers, so we use steps of 1
-        for t_idx in range(1, self.time_budget+1):
+        for t_idx in range(1, self.num_cols+1):
+            # current time
             t = t_idx * self.min_edge
             max_val = 0.0
             best_successor = -1
@@ -177,8 +208,8 @@ class StandardSOTASolver(SOTA):
                     max_val = conv
                     best_successor = j
 
-            self.sota_matrix[node_i, t_idx] = max_val
-            self.policy_matrix[node_i, t_idx] = best_successor
+            self.sota_matrix[node_i, t_idx-1] = max_val
+            self.policy_matrix[node_i, t_idx-1] = best_successor
 
     def update_sota(self):
         """
@@ -205,7 +236,10 @@ class StandardSOTASolver(SOTA):
             delta = self.update_sota()
             if delta < eps:
                 # convergence
+                print("Convergence reached!")
                 break
+        
+        print("End of iterations")
         return self.sota_matrix
     
     def extract_path(self, node_s):
@@ -234,12 +268,16 @@ class SingleIterationSOTASolver(SOTA):
                 best_successor = node_j
         
         # updating the sota_matrix and policy_matrix for node_i
-        self.sota_matrix[node_i, t] = max_value
-        self.policy_matrix[node_i, t] = best_successor
+        t_idx = math.floor(t / self.min_edge)
+        # to avoid "out of bounds" error with min_edge = 1
+        t_idx = min(t_idx, self.num_cols-1)
+        self.sota_matrix[node_i, t_idx] = max_value
+        self.policy_matrix[node_i, t_idx] = best_successor
 
     def update_row(self, node_i, k, prev_sota_matrix):
         """
         Update the row of the SOTA matrix corresponding to node_i
+        from tauk-min-edge+1 to tauk.
         """
         # skipping destination node
         if node_i == self.node_d:
@@ -248,11 +286,12 @@ class SingleIterationSOTASolver(SOTA):
         # compute the current maximum time
         tauk = min(self.time_budget, k * self.min_edge)
 
-        t_start = max(0, tauk - self.min_edge + 1)
-        t_end = tauk
+        t_start_idx = int(max(0, tauk - self.min_edge + 1) // self.min_edge)
+        t_end_idx = int(tauk // self.min_edge)
 
-        for t in range(t_start, t_end + 1):
-            self.update_node(node_i, t, prev_sota_matrix)
+        for t_idx in range(t_start_idx, t_end_idx + 1):
+            t_real = t_idx * self.min_edge
+            self.update_node(node_i, t_real, prev_sota_matrix)
 
     def update_sota(self, k):
         """

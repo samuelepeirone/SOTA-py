@@ -5,6 +5,7 @@ matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.patches as mpatches
+import math
 
 adjacency_matrix = np.array([
     [0, 4, 5, 9, 0, 0, 0, 0, 0],
@@ -65,48 +66,70 @@ class StochasticGraph:
         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
         plt.show()
 
-    def print_graph(self):
+    def print_graph(self, grid_shape=None):
         """
         Dislaying the graph without isolated nodes. Nodes without incoming or outgoing edges are ignored.
         """
-        # looks for active nodes (at least one incoming or outgoing edge)
+        n_total = self.adjacency_matrix.shape[0]
+
+        # find active nodes
         active_nodes = np.where(self.adjacency_matrix.sum(axis=0) + self.adjacency_matrix.sum(axis=1) > 0)[0]
-        
-        # creates a new matrix with only active nodes and then the graph
-        reduced_matrix = self.adjacency_matrix[np.ix_(active_nodes, active_nodes)]
-        
-        G = nx.from_numpy_array(reduced_matrix, create_using=nx.DiGraph)
-        
-        # renames with original node indices
-        mapping = {i: active_nodes[i] for i in range(len(active_nodes))}
-        G = nx.relabel_nodes(G, mapping)
-        
-        pos = nx.spring_layout(G)
-        nx.draw(G, pos, with_labels=True, node_color='lightblue', edge_color='gray', arrows=True)
-        edge_labels = nx.get_edge_attributes(G, 'weight')
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+
+        # Reduced matrix
+        reduced_matrix = self.adjacency_matrix[np.ix_(active_nodes, active_nodes)].astype(float)
+
+        # creates the graph
+        G = nx.DiGraph()
+        for i_idx, i in enumerate(active_nodes):
+            for j_idx, j in enumerate(active_nodes):
+                weight = reduced_matrix[i_idx, j_idx]
+                if weight != 0:
+                    G.add_edge(i, j, weight=weight)
+
+        # === Fixed grid layout for all nodes ===
+        cols = math.ceil(math.sqrt(n_total))
+        pos = {}
+        for node in range(n_total):
+            r, c = divmod(node, cols)
+            pos[node] = (c, -r)  # c -> x, -r -> y
+
+        # drawing
+        nx.draw(G, {node: pos[node] for node in active_nodes},
+                with_labels=True, node_color='lightblue', edge_color='gray', arrows=True)
+
+        # Edge labels
+        edge_labels = {(u, v): f"{d['weight']:.1f}" for u, v, d in G.edges(data=True)}
+        nx.draw_networkx_edge_labels(G, {node: pos[node] for node in active_nodes}, edge_labels=edge_labels)
+
+        plt.axis('equal')
         plt.show()
 
     def print_graph_sections(self, node_sections=None):
         """
         Displaying the graph with nodes colored based on their sections if provided.
         """
-        # finds active nodes
+        n_total = self.adjacency_matrix.shape[0]  # numero totale di nodi originari
+
+        # find active nodes
         active_nodes = np.where(self.adjacency_matrix.sum(axis=0) + self.adjacency_matrix.sum(axis=1) > 0)[0]
         reduced_matrix = self.adjacency_matrix[np.ix_(active_nodes, active_nodes)]
 
-        # creates the graph
+        # creates graph
         G = nx.from_numpy_array(reduced_matrix, create_using=nx.DiGraph)
         mapping = {i: active_nodes[i] for i in range(len(active_nodes))}
         G = nx.relabel_nodes(G, mapping)
 
-        pos = nx.spring_layout(G, seed=42)
+        # === fixed grid layout ===
+        cols = math.ceil(math.sqrt(n_total))
+        pos = {}
+        for node in range(n_total):
+            r, c = divmod(node, cols)
+            pos[node] = (c, -r)  # c -> x, -r -> y
 
-        # color nodes based on sections if provided
+        # === nodes color based on sections ===
         if node_sections is not None:
             unique_sections = sorted(set(node_sections.values()))
             color_map = cm.get_cmap('tab10', len(unique_sections))
-
             node_colors = [
                 color_map(unique_sections.index(node_sections[n])) if n in node_sections else (0.8, 0.8, 0.8, 1.0)
                 for n in G.nodes()
@@ -114,12 +137,14 @@ class StochasticGraph:
         else:
             node_colors = 'lightblue'
 
-        # graph drawing
-        nx.draw(G, pos, with_labels=True, node_color=node_colors, edge_color='gray', arrows=True)
-        edge_labels = nx.get_edge_attributes(G, 'weight')
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+        # === draw graph ===
+        nx.draw(G, {n: pos[n] for n in G.nodes()},
+                with_labels=True, node_color=node_colors, edge_color='gray', arrows=True)
 
-        # legenda
+        edge_labels = {(u, v): f"{d['weight']:.1f}" for u, v, d in G.edges(data=True)}
+        nx.draw_networkx_edge_labels(G, {n: pos[n] for n in G.nodes()}, edge_labels=edge_labels)
+
+        # === legenda ===
         if node_sections is not None:
             legend_handles = [
                 mpatches.Patch(color=color_map(i), label=f'Section {unique_sections[i]}')
@@ -127,6 +152,7 @@ class StochasticGraph:
             ]
             plt.legend(handles=legend_handles, title="Sections")
 
+        plt.axis('equal')
         plt.show()
 
     def find_min_edge(self):
@@ -183,6 +209,9 @@ class StochasticGraph:
     
     def get_variance_matrix_value(self, i, j):
         return self.variance_matrix[i][j]
+    
+    def get_edge_mean(self, node_i, node_j):
+        return self.adjacency_matrix[node_i, node_j]
     
     def get_incoming_nodes(self, node):
         """
