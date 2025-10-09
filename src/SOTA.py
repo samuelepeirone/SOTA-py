@@ -140,30 +140,32 @@ class SOTA(ABC):
     def extract_path_from_time(self, start_node, t_idx):
         """
         Extracts the optimal path for time-index watching the policy row.
+        It stops if we get to destination, we get to a node -1 or if a loop is detected.
         @return: list of nodes representing the optimal path from source to destination
         """
-        path = [int(start_node)]
-        current_node = start_node
+        path = [start_node]
+        current = start_node
+        visited = set()
 
-        policy_array = np.array([ 5,  2,  7,  2,  3, 10,  7, 12,  7, 14, 15, 16,  7, 12, 13, 20, 21,
-       12, 23, 18, -1, 20, 21, 22, 23])
+        policy = self.policy_matrix[:, t_idx]
 
-        steps = 0
+        while True:
+            # to avoid infinite loops
+            if current in visited:
+                print(f"Loop detected from {start_node} at time_idx {t_idx}")
+                break
 
-        while current_node != self.node_d and steps < self.num_nodes:
-            next_node = policy_array[current_node]
+            visited.add(current)
 
-            if next_node == -1:
-                # policy non definita, interrompi il percorso
+            # retrieving the next node
+            next_node = policy[current]
+
+            # stop if next = -1 or destination
+            if next_node == -1 or current == self.node_d:
                 break
 
             path.append(int(next_node))
-            current_node = next_node
-            steps += 1
-
-        # assicura che il nodo di destinazione sia incluso se raggiunto
-        if current_node == self.node_d and path[-1] != self.node_d:
-            path.append(int(self.node_d))
+            current = next_node
 
         return path
 
@@ -286,8 +288,8 @@ class SingleIterationSOTASolver(SOTA):
         # compute the current maximum time
         tauk = min(self.time_budget, k * self.min_edge)
 
-        t_start_idx = int(max(0, tauk - self.min_edge + 1) // self.min_edge)
-        t_end_idx = int(tauk // self.min_edge)
+        t_start_idx = int(max(0, tauk - self.min_edge + 1) / self.min_edge)
+        t_end_idx = int(tauk / self.min_edge)
 
         for t_idx in range(t_start_idx, t_end_idx + 1):
             t_real = t_idx * self.min_edge
@@ -311,11 +313,8 @@ class SingleIterationSOTASolver(SOTA):
         Updates the SOTA matrix for L iterations, where L is the maximum number of steps
         that can be taken within the time budget.
         """
-        # computing number of iterations
-        L = int(self.time_budget / self.min_edge)
-
         # loop over all iterations
-        for k in range(1, L + 1):
+        for k in range(1, self.num_cols):
             self.update_sota(k)
 
     def extract_path(self, node_s):

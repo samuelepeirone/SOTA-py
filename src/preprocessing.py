@@ -170,15 +170,23 @@ class ArcFlags:
         self.SOTASolver.set_destination(dest_node)
         self.SOTASolver.solve()
 
+        policy = self.SOTASolver.get_policy_matrix()
+
+        if np.all(policy[:, -1] == -1):
+            print("[DEBUG] Last column of policy matrix only contains -1, no path possible.")
+            self.SOTASolver.print_policy_matrix()
+
         # initializing the set of arcs
         paths = {}
 
         for s in range(self.graph.get_num_nodes()):
             if s == dest_node:
                 continue
+            
             path = self.SOTASolver.extract_path(s)
 
             nodes = list(path)
+
             if len(nodes) < 2:
                 paths[s] = []
             else:
@@ -211,6 +219,9 @@ class ArcFlags:
         for d in range(self.graph.get_num_nodes()):
             region_d = self.regions[d]
             relevant_edges = self.collect_relevant_edges(d)
+            
+            if len(relevant_edges) == 0:
+                print(f"[WARN] No relevant edges found for destination {d}, region {region_d}")
 
             for e in relevant_edges:
                 self.arc_flags[e][region_d] = True
