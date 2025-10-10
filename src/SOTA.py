@@ -140,23 +140,15 @@ class SOTA(ABC):
     def extract_path_from_time(self, start_node, t_idx):
         """
         Extracts the optimal path for time-index watching the policy row.
-        It stops if we get to destination, we get to a node -1 or if a loop is detected.
+        It stops if we get to destination, we get to a node -1.
         @return: list of nodes representing the optimal path from source to destination
         """
         path = [start_node]
         current = start_node
-        visited = set()
 
         policy = self.policy_matrix[:, t_idx]
 
         while True:
-            # to avoid infinite loops
-            if current in visited:
-                print(f"Loop detected from {start_node} at time_idx {t_idx}")
-                break
-
-            visited.add(current)
-
             # retrieving the next node
             next_node = policy[current]
 
