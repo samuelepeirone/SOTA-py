@@ -146,6 +146,9 @@ class SOTA(ABC):
         path = [start_node]
         current = start_node
 
+        max_steps = self.num_nodes*2
+        steps = 0
+
         policy = self.policy_matrix[:, t_idx]
 
         while True:
@@ -158,6 +161,12 @@ class SOTA(ABC):
 
             path.append(int(next_node))
             current = next_node
+
+            steps += 1
+
+            if steps > max_steps:
+                print("[Warning]A loop in the policy matrix was detected")
+                break
 
         return path
 
@@ -230,10 +239,8 @@ class StandardSOTASolver(SOTA):
             delta = self.update_sota()
             if delta < eps:
                 # convergence
-                print("Convergence reached!")
                 break
         
-        print("End of iterations")
         return self.sota_matrix
     
     def extract_path(self, node_s):

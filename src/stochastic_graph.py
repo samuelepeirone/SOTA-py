@@ -188,6 +188,12 @@ class StochasticGraph:
         """
         return self.adjacency_matrix.shape[0]
 
+    def get_nodes(self):
+        """
+        Returns the list of nodes in the graph
+        """
+        return list(range(self.num_nodes))
+
     def get_edges(self):
         """
         Returns a list of edges in the graph as (i, j) tuples.

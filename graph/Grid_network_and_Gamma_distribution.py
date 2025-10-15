@@ -96,3 +96,5 @@ class Matrix():
         self.build_link_var()
         return self.compute_mean_matrix(), self.compute_variance_matrix()
     
+    def get_matrices(self):
+        return self.compute_mean_matrix(), self.compute_variance_matrix()
