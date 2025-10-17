@@ -66,9 +66,10 @@ class StochasticGraph:
         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
         plt.show()
 
-    def print_graph(self, grid_shape=None):
+    def print_graph(self, path=None, grid_shape=None):
         """
         Dislaying the graph without isolated nodes. Nodes without incoming or outgoing edges are ignored.
+        If a path is specified (as a list of nodes), it will be displayed
         """
         n_total = self.adjacency_matrix.shape[0]
 
@@ -101,32 +102,52 @@ class StochasticGraph:
         edge_labels = {(u, v): f"{d['weight']:.1f}" for u, v, d in G.edges(data=True)}
         nx.draw_networkx_edge_labels(G, {node: pos[node] for node in active_nodes}, edge_labels=edge_labels)
 
+        # showing the path
+        if path and len(path) > 1:
+            path_edges = [(path[i], path[i+1]) for i in range(len(path)-1)]
+            
+            nx.draw_networkx_edges(
+                G,
+                pos={node: pos[node] for node in active_nodes},
+                edgelist=path_edges,
+                edge_color='red',
+                width=2.5,
+                arrows=True
+            )
+            nx.draw_networkx_nodes(
+                G,
+                pos={node: pos[node] for node in active_nodes},
+                nodelist=path,
+                node_color='orange'
+            )
+
         plt.axis('equal')
         plt.show()
 
-    def print_graph_sections(self, node_sections=None):
+    def print_graph_sections(self, node_sections=None, path=None):
         """
         Displaying the graph with nodes colored based on their sections if provided.
+        If a path is specified (as a list of nodes), it will be displayed
         """
-        n_total = self.adjacency_matrix.shape[0]  # numero totale di nodi originari
+        n_total = self.adjacency_matrix.shape[0]  # numero totale di nodi
 
-        # find active nodes
+        # === find active nodes ===
         active_nodes = np.where(self.adjacency_matrix.sum(axis=0) + self.adjacency_matrix.sum(axis=1) > 0)[0]
         reduced_matrix = self.adjacency_matrix[np.ix_(active_nodes, active_nodes)]
 
-        # creates graph
+        # === creating graph ===
         G = nx.from_numpy_array(reduced_matrix, create_using=nx.DiGraph)
         mapping = {i: active_nodes[i] for i in range(len(active_nodes))}
         G = nx.relabel_nodes(G, mapping)
 
-        # === fixed grid layout ===
+        # === fixed-grid layout ===
         cols = math.ceil(math.sqrt(n_total))
         pos = {}
         for node in range(n_total):
             r, c = divmod(node, cols)
-            pos[node] = (c, -r)  # c -> x, -r -> y
+            pos[node] = (c, -r)
 
-        # === nodes color based on sections ===
+        # === different nodes colors for different sections ===
         if node_sections is not None:
             unique_sections = sorted(set(node_sections.values()))
             color_map = cm.get_cmap('tab10', len(unique_sections))
@@ -137,20 +158,69 @@ class StochasticGraph:
         else:
             node_colors = 'lightblue'
 
-        # === draw graph ===
-        nx.draw(G, {n: pos[n] for n in G.nodes()},
-                with_labels=True, node_color=node_colors, edge_color='gray', arrows=True)
+        # === drawing base graph ===
+        nx.draw(
+            G,
+            {n: pos[n] for n in G.nodes()},
+            with_labels=True,
+            node_color=node_colors,
+            edge_color='gray',
+            arrows=True
+        )
 
+        # weights
         edge_labels = {(u, v): f"{d['weight']:.1f}" for u, v, d in G.edges(data=True)}
         nx.draw_networkx_edge_labels(G, {n: pos[n] for n in G.nodes()}, edge_labels=edge_labels)
 
-        # === legenda ===
+        # === legend ===
         if node_sections is not None:
             legend_handles = [
                 mpatches.Patch(color=color_map(i), label=f'Section {unique_sections[i]}')
                 for i in range(len(unique_sections))
             ]
             plt.legend(handles=legend_handles, title="Sections")
+
+        # === lighting the path ===
+        if path and len(path) > 1:
+            path_edges = [(path[i], path[i+1]) for i in range(len(path)-1)]
+
+            # edges
+            pos_active = {node: pos[node] for node in active_nodes}
+            nx.draw_networkx_edges(
+                G,
+                pos=pos_active,
+                edgelist=path_edges,
+                edge_color='orange',
+                width=1.75,
+                arrows=True
+            )
+
+            # border of the nodes
+            nx.draw_networkx_nodes(
+                G,
+                pos=pos_active,
+                nodelist=path,
+                node_color='none',
+                edgecolors='orange',
+                linewidths=2.5,
+                node_size=440
+            )
+
+            # Secondo strato: colore originale della sezione
+            if node_sections is not None:
+                path_colors = [
+                    color_map(unique_sections.index(node_sections[n])) if n in node_sections else (0.8, 0.8, 0.8, 1.0)
+                    for n in path
+                ]
+            else:
+                path_colors = ['lightblue'] * len(path)
+
+            nx.draw_networkx_nodes(
+                G,
+                pos=pos_active,
+                nodelist=path,
+                node_color=path_colors
+            )
 
         plt.axis('equal')
         plt.show()

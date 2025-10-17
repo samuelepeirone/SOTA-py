@@ -248,8 +248,8 @@ class ArcFlags(ABC):
         for edge, flags in self.arc_flags.items():
             print(f"Edge {edge}: {flags}")
     
-    def print_graph_sections(self):
-        self.graph.print_graph_sections(self.regions)
+    def print_graph_sections(self, path=None):
+        self.graph.print_graph_sections(self.regions, path)
 
     def partition_graph(self, alpha=1.0, beta=1.0):
         """
