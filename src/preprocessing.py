@@ -3,6 +3,8 @@ import time
 from sklearn.cluster import KMeans
 from abc import ABC, abstractmethod
 
+from sklearn.preprocessing import MinMaxScaler
+
 class Reach(ABC):
     """
     Metric that quantifies the radius of node's relevance.
@@ -235,13 +237,13 @@ class detReach(Reach):
         return super().reach_pruning()
 
 class ArcFlags(ABC):
-    def __init__(self, graph, num_regions, node_s, node_d):
+    def __init__(self, graph, node_s, node_d):
         self.graph = graph
-        self.num_regions = num_regions
         self.regions = None
-        self.arc_flags = {e: {r: False for r in range(self.num_regions)} for e in self.graph.get_edges()}
+        self.arc_flags = None
         self.node_s = node_s
         self.node_d = node_d
+        self.num_regions = None
 
     def print_arcflags(self):
         print("Arc-Flags for each edge:")
@@ -251,20 +253,79 @@ class ArcFlags(ABC):
     def print_graph_sections(self, path=None):
         self.graph.print_graph_sections(self.regions, path)
 
-    def partition_graph(self, alpha=1.0, beta=1.0):
-        """
-        Divides the graph into num_regions regions using K-means algorithm on node vectors.
-        Each node is represented by the vector:
-        x_i = alpha * A[i,:] + beta * Var[i,:]
-        """
-        # combining the two matrices
-        X = alpha * self.graph.adjacency_matrix + beta * self.graph.variance_matrix
+    def initialize_arcflags(self):
+        self.arc_flags = {e: {r: False for r in range(self.num_regions)} for e in self.graph.get_edges()}
+        return
 
-        # applying K-means clustering
-        kmeans = KMeans(n_clusters=self.num_regions, random_state=42, n_init=10)
-        region_labels = kmeans.fit_predict(X)
+    def canopy_clustering(self, X, T1=0.8, T2=0.4):
+        """
+        Canopy clustering algorithm
 
-        self.regions = {i: int(region_labels[i]) for i in range(self.graph.get_num_nodes())}
+        @param X:   feature matrix
+        @param T1:  a point within this distance from canopy center will be included in the canopy
+        @param T2:  a point within this distance from canopy center will be removed from candidates pool
+        """
+        unassigned = set(self.graph.get_nodes())
+        canopies = []
+        centers = []
+
+        while unassigned:
+            # choose casually a point as center of the new canopy
+            center_idx = unassigned.pop()
+            center = X[center_idx]
+            current_canopy = [center_idx]   # initializing the current canopy
+            to_remove = set()
+
+            # find all points in range T1
+            for i in unassigned:
+                # euclidean distance betweeen center and unassigned point
+                d = np.linalg.norm(center - X[i])
+                if d < T1:
+                    current_canopy.append(i)
+                if d < T2:
+                    to_remove.add(i)
+            
+            # updating the sets
+            unassigned -= to_remove
+
+            # saving canopy and center
+            canopies.append(current_canopy)
+            centers.append(center_idx)
+        
+        return canopies, centers
+
+    def partition_graph(self, **kwargs):
+        """
+        Partitioning the graph using the Canopy Kmeans algorithm.
+        """
+        # building the feature vector x_i = [mu_i, sigma_i]
+        mean_edges = np.mean(self.graph.adjacency_matrix, axis=1)
+        var_edges = np.mean(self.graph.variance_matrix, axis=1)
+
+        X = np.column_stack([mean_edges, var_edges])
+
+        # bounding the values between 0 and 1
+        scaler = MinMaxScaler()
+        X_scaled = scaler.fit_transform(X)
+
+        canopies, centers = self.canopy_clustering(X_scaled, **kwargs)
+
+        self.num_regions = len(centers)
+
+        # retrieving the feature values of the centroids found with canopy clustering
+        initial_centroids = X_scaled[centers]
+
+        # using kmeans with canopy-found centroids
+        kmeans = KMeans(n_clusters=len(centers),
+                        init=initial_centroids,
+                        n_init=1,
+                        random_state=42)
+        
+        kmeans.fit(X_scaled)
+
+        labels = kmeans.labels_
+
+        self.regions = {i: int(labels[i]) for i in range(self.graph.get_num_nodes())}
 
         return self.regions
 
@@ -292,8 +353,8 @@ class ArcFlags(ABC):
         print(f"[ArcFlags] Pruned {pruned_edges} edges for destination {self.node_d} (region {region_d}).")
 
 class bfArcFlags(ArcFlags):
-    def __init__(self, graph, num_regions, SOTASolver, node_s=None):
-        super().__init__(graph, num_regions, node_s, node_d=SOTASolver.get_destination())
+    def __init__(self, graph, SOTASolver, node_s=None):
+        super().__init__(graph, node_s, node_d=SOTASolver.get_destination())
         self.SOTASolver = SOTASolver
         self.time_budget = SOTASolver.get_time_budget()
 
@@ -356,6 +417,8 @@ class bfArcFlags(ArcFlags):
         print(f"Partitioning of the graph in {self.num_regions} regions executed in {end-start:.4f} seconds!")
 
         print("Computing arcflags...")
+        
+        self.initialize_arcflags()
 
         for d in range(self.graph.get_num_nodes()):
             region_d = self.regions[d]
@@ -375,8 +438,8 @@ class bfArcFlags(ArcFlags):
         return super().arcflags_pruning()
 
 class detArcFlags(ArcFlags):
-    def __init__(self, graph, num_regions, DetAlgorithm, node_d, node_s = None):
-        super().__init__(graph, num_regions, node_s, node_d)
+    def __init__(self, graph, DetAlgorithm, node_d, node_s = None):
+        super().__init__(graph, node_s, node_d)
         self.DetAlgorithm = DetAlgorithm
 
     def arcflags_computation(self):
@@ -390,6 +453,8 @@ class detArcFlags(ArcFlags):
         print(f"Partitioning of the graph in {self.num_regions} regions executed in {end-start:.4f} seconds!")
 
         print("Computing arcflags...")
+
+        self.initialize_arcflags()
 
         nodes = self.graph.get_nodes()
 

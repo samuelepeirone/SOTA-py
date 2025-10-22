@@ -179,6 +179,9 @@ class SOTA(ABC):
         return self.extract_path_from_time(start_node, self.num_cols-1)
 
 class StandardSOTASolver(SOTA):
+    """
+    Solving SOTA problem with successive approximations approach.
+    """
     def __init__(self, graph, node_d, time_budget):
         super().__init__(graph, node_d, time_budget)
 

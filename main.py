@@ -21,11 +21,10 @@ def main():
 
     graph = StochasticGraph(adj_matrix, var_matrix)
     d = Dijkstra(adj_matrix)
-    r = detReach(graph, d, 2, 19)
-    r.reach_computation()
-    r.print_reach_values()
-    r.reach_pruning()
-    graph.print_graph()
+    f = detArcFlags(graph, d, 20)
+    f.arcflags_computation()
+    f.arcflags_pruning()
+    f.print_graph_sections()
 
 if __name__ == "__main__":
     main()
