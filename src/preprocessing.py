@@ -1,6 +1,5 @@
 import numpy as np
 import time
-from sklearn.cluster import KMeans
 from abc import ABC, abstractmethod
 
 from sklearn.preprocessing import MinMaxScaler
@@ -256,6 +255,63 @@ class ArcFlags(ABC):
     def initialize_arcflags(self):
         self.arc_flags = {e: {r: False for r in range(self.num_regions)} for e in self.graph.get_edges()}
         return
+    
+    def canopy_kmeans(self, X, canopies, centers, max_iter=100):
+        """
+        Limited K-means, that computes only distances between points that are in at least one common canopy.
+        
+        @param X: feature matrix
+
+        Centroids are initialized as the canopies centers and k=number of canopies
+        """
+        n_samples = X.shape[0]  # number of features
+        k = len(centers)
+        centroids = X[centers].copy()
+
+        # Map that memorizes, for each point, the list of canopies where it appears
+        point_to_canopies = {i: set() for i in range(n_samples)}
+        for c_idx, canopy in enumerate(canopies):
+            for p in canopy:
+                point_to_canopies[p].add(c_idx)
+
+        # Inizialize the labels
+        labels = np.zeros(n_samples, dtype=int)
+
+        for iteration in range(max_iter):
+            # --- assigning points to centroids ---
+            new_labels = np.zeros(n_samples, dtype=int)
+            for i in range(n_samples):
+                allowed_centroids = set()
+                # finding associated centroids to the point
+                for c_idx in point_to_canopies[i]:
+                    allowed_centroids.add(c_idx)
+                
+                if not allowed_centroids:
+                    # if a point isn't in any canopy, i'll search through all centroids
+                    allowed_centroids = range(k)
+
+                # computing distance only for the allowed centroids
+                dists = np.linalg.norm(X[i] - centroids[list(allowed_centroids)], axis=1)
+                closest_idx = list(allowed_centroids)[np.argmin(dists)]
+                new_labels[i] = closest_idx
+
+            # --- updating the centroids ---
+            new_centroids = np.zeros_like(centroids)
+            for j in range(k):
+                points_in_cluster = X[new_labels == j]
+                if len(points_in_cluster) > 0:
+                    new_centroids[j] = points_in_cluster.mean(axis=0)
+                else:
+                    new_centroids[j] = centroids[j]
+
+            # convergence test: same labels as previous iteration
+            if np.all(labels == new_labels):
+                break
+
+            labels = new_labels
+            centroids = new_centroids
+
+        return labels, centroids
 
     def canopy_clustering(self, X, T1=0.8, T2=0.4):
         """
@@ -316,14 +372,7 @@ class ArcFlags(ABC):
         initial_centroids = X_scaled[centers]
 
         # using kmeans with canopy-found centroids
-        kmeans = KMeans(n_clusters=len(centers),
-                        init=initial_centroids,
-                        n_init=1,
-                        random_state=42)
-        
-        kmeans.fit(X_scaled)
-
-        labels = kmeans.labels_
+        labels, _ = self.canopy_kmeans(X_scaled, canopies, centers)
 
         self.regions = {i: int(labels[i]) for i in range(self.graph.get_num_nodes())}
 
