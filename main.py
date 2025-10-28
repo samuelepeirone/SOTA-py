@@ -22,9 +22,8 @@ def main():
     graph = StochasticGraph(adj_matrix, var_matrix)
     d = Dijkstra(adj_matrix)
     f = detArcFlags(graph, d, 20)
-    f.partition_graph()
-    #f.arcflags_computation()
-    #f.arcflags_pruning()
+    f.arcflags_computation()
+    f.arcflags_pruning()
     f.print_graph_sections()
 
 if __name__ == "__main__":

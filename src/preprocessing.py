@@ -100,7 +100,7 @@ class Reach(ABC):
                         #print(f"Node {i} pruned")
                         pruned_nodes.add(i)
         
-        print(f"Pruned nodes: {pruned_nodes}")
+        print(f"Pruned {len(pruned_nodes)} nodes: {pruned_nodes}")
         return pruned_nodes
 
     def reach_test(self):
