@@ -66,7 +66,7 @@ class StochasticGraph:
         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
         plt.show()
 
-    def print_graph(self, path=None, grid_shape=None):
+    def print_graph(self, path=None, grid_shape=None, show_edge_labels=True):
         """
         Dislaying the graph without isolated nodes. Nodes without incoming or outgoing edges are ignored.
         If a path is specified (as a list of nodes), it will be displayed
@@ -99,8 +99,9 @@ class StochasticGraph:
                 with_labels=True, node_color='lightblue', edge_color='gray', arrows=True)
 
         # Edge labels
-        edge_labels = {(u, v): f"{d['weight']:.1f}" for u, v, d in G.edges(data=True)}
-        nx.draw_networkx_edge_labels(G, {node: pos[node] for node in active_nodes}, edge_labels=edge_labels)
+        if show_edge_labels:
+            edge_labels = {(u, v): f"{d['weight']:.1f}" for u, v, d in G.edges(data=True)}
+            nx.draw_networkx_edge_labels(G, {node: pos[node] for node in active_nodes}, edge_labels=edge_labels)
 
         # showing the path
         if path and len(path) > 1:
@@ -124,7 +125,7 @@ class StochasticGraph:
         plt.axis('equal')
         plt.show()
 
-    def print_graph_sections(self, node_sections=None, path=None):
+    def print_graph_sections(self, node_sections=None, path=None, show_edge_labels=True):
         """
         Displaying the graph with nodes colored based on their sections if provided.
         If a path is specified (as a list of nodes), it will be displayed
@@ -169,8 +170,9 @@ class StochasticGraph:
         )
 
         # weights
-        edge_labels = {(u, v): f"{d['weight']:.1f}" for u, v, d in G.edges(data=True)}
-        nx.draw_networkx_edge_labels(G, {n: pos[n] for n in G.nodes()}, edge_labels=edge_labels)
+        if show_edge_labels:
+            edge_labels = {(u, v): f"{d['weight']:.1f}" for u, v, d in G.edges(data=True)}
+            nx.draw_networkx_edge_labels(G, {n: pos[n] for n in G.nodes()}, edge_labels=edge_labels)
 
         # === legend ===
         if node_sections is not None:

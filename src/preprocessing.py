@@ -55,7 +55,7 @@ class Reach(ABC):
         Pruning if r(i,T) < min(m(s,i), m(i,d)). We use the cached values to avoid
         recomputing m(s,i) and m(i,d), as we computed them in reach_computation function.
         """
-        print("Pruning nodes...")
+        print("\rPruning nodes...", end="")
 
         pruned_nodes = set()
 
@@ -100,7 +100,7 @@ class Reach(ABC):
                         #print(f"Node {i} pruned")
                         pruned_nodes.add(i)
         
-        print(f"Pruned {len(pruned_nodes)} nodes: {pruned_nodes}")
+        print(f"\rPruned {len(pruned_nodes)} nodes: {pruned_nodes}", end="\n")
         return pruned_nodes
 
     def reach_test(self):
@@ -136,7 +136,7 @@ class bfReach(Reach):
         """
         Computes the reach values by running a SOTA search for all possible destinations in the graph.
         """
-        print("Computing reach values...")
+        print("\rComputing reach values...", end="")
         # reset reach values and caches
         self.reach_values = np.zeros(self.num_nodes)
         self.m_id_cache.clear()
@@ -174,7 +174,7 @@ class bfReach(Reach):
 
                     self.reach_values[i] = max(self.reach_values[i], min(m_si, m_id[i]))
         
-        print("Reach values computed")
+        print("\rReach values computed", end="\n")
         return self.reach_values
 
     def reach_pruning(self):
@@ -190,7 +190,7 @@ class detReach(Reach):
         """
         Computing reach values using a deterministic algorithm
         """
-        print("Computing reach values...")
+        print("\rComputing reach values...", end="")
         # reset reach values and caches
         self.reach_values = np.zeros(self.num_nodes)
         self.m_id_cache.clear()
@@ -229,7 +229,7 @@ class detReach(Reach):
 
                     self.reach_values[i] = max(self.reach_values[i], min(m_si[i], m_id))
 
-        print("Reach values computed")
+        print("\rReach values computed", end="\n")
         return self.reach_values
 
     def reach_pruning(self):
@@ -249,8 +249,8 @@ class ArcFlags(ABC):
         for edge, flags in self.arc_flags.items():
             print(f"Edge {edge}: {flags}")
     
-    def print_graph_sections(self, path=None):
-        self.graph.print_graph_sections(self.regions, path)
+    def print_graph_sections(self, path=None, show_edge_labels=True):
+        self.graph.print_graph_sections(self.regions, path, show_edge_labels=show_edge_labels)
 
     def initialize_arcflags(self):
         self.arc_flags = {e: {r: False for r in range(self.num_regions)} for e in self.graph.get_edges()}
@@ -387,7 +387,7 @@ class ArcFlags(ABC):
         """
         Prunes from the graph edges whose flag is False for the destination-node's region.
         """
-        print("Pruning edges...")
+        print("\rPruning edges...", end="")
 
         region_d = self.regions.get(self.node_d)
         
@@ -399,7 +399,7 @@ class ArcFlags(ABC):
                 self.graph.prune_edge(u,v)
                 pruned_edges += 1
         
-        print(f"[ArcFlags] Pruned {pruned_edges} edges for destination {self.node_d} (region {region_d}).")
+        print(f"\r[ArcFlags] Pruned {pruned_edges} edges for destination {self.node_d} (region {region_d}).", end="\n")
 
 class bfArcFlags(ArcFlags):
     def __init__(self, graph, SOTASolver, node_s=None):
@@ -459,13 +459,13 @@ class bfArcFlags(ArcFlags):
         """
         Computes the arc-flags for all edges and all regions with brute force approach.
         """
-        print("Executing partition...")
+        print(f"\rExecuting partition...", end="")
         start = time.time()
         self.partition_graph()
         end = time.time()
         print(f"Partitioning of the graph in {self.num_regions} regions executed in {end-start:.4f} seconds!")
 
-        print("Computing arcflags...")
+        print(f"\rComputing arcflags...", end="")
         
         self.initialize_arcflags()
 
@@ -479,7 +479,7 @@ class bfArcFlags(ArcFlags):
             for e in relevant_edges:
                 self.arc_flags[e][region_d] = True
         
-        print("Arcflags computed!")
+        print(f"\rArcflags computed!", end="")
 
         return self.arc_flags
 
@@ -495,13 +495,13 @@ class detArcFlags(ArcFlags):
         """
         Computing arcflags using deterministic algorithm.
         """
-        print("Executing partition...")
+        print(f"\rExecuting partition...", end="")
         start = time.time()
         self.partition_graph()
         end = time.time()
-        print(f"Partitioning of the graph in {self.num_regions} regions executed in {end-start:.4f} seconds!")
+        print(f"\rPartitioning of the graph in {self.num_regions} regions executed in {end-start:.4f} seconds!", end="\n")
 
-        print("Computing arcflags...")
+        print(f"\rComputing arcflags...", end="")
 
         self.initialize_arcflags()
 
@@ -525,7 +525,7 @@ class detArcFlags(ArcFlags):
                 for e in visited_edges:
                     self.arc_flags[e][region_d] = True
 
-        print("Arcflags computed!")
+        print(f"\rArcflags computed!", end="\n")
 
         return self.arc_flags           
 

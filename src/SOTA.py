@@ -63,6 +63,15 @@ class SOTA(ABC):
     
     def get_num_cols(self):
         return self.num_cols
+
+    def set_min_edge(self, min_edge):
+        """
+        Sets the new minimum edge weight and re-initializes the SOTA matrix.
+        """
+        self.min_edge = min_edge
+        self.num_cols = math.ceil(self.time_budget / self.min_edge)
+        self.sota_matrix = self.initialize_matrix()
+        self.policy_matrix = -1 * np.ones((self.num_nodes, self.num_cols), dtype=int)
     
     def set_destination(self, node_d):
         """
@@ -107,21 +116,27 @@ class SOTA(ABC):
     @abstractmethod
     def compute_convolution(self, node_i, node_j, t, matrix): 
         """ 
-        Discrete convolution for edge (node_i, node_j) in matrix at time t.
+        Discrete convolution for node_j in matrix at time t.
         @param:t: remaining time
         @return:m: convolution result
         """
         m = 0.0
-        # we transform time into discretized index
-        num_steps = int(t // self.min_edge)
 
-        for s_step in range(1, num_steps + 1):
+        # we transform time into discretized index
+        for s_step in range(1, self.num_cols + 1):
             s_time = s_step * self.min_edge  # corresponding real time
             p = self.compute_density(node_i, node_j, s_time)
 
-            matrix_col = int((t - s_time) // self.min_edge)
+            # u_j(t-omega)
+            matrix_col = int((t - s_time) / self.min_edge)
+
             if 0 <= matrix_col < self.num_cols:
-                m += p * matrix[int(node_j), int(matrix_col)]
+                m += p * matrix[int(node_j), int(matrix_col)] * self.min_edge
+
+            # clip bound
+            if m > 1.0:
+                m = 1.0
+                break
 
         return m
 
@@ -238,10 +253,17 @@ class StandardSOTASolver(SOTA):
         It iteratively updates the SOTA matrix until convergence or max iterations reached.
         @param eps: convergence threshold
         """
-        for _ in range(max_iter):
+        print(f"Solving SOTA with Successive Approximations... (Discretizing by Delta t = {self.min_edge})")
+
+        delta = float('inf')
+
+        for i in range(max_iter):
+            print(f"\rComputing SOTA..., iteration number: {i+1}, delta={delta}", end="")
+
             delta = self.update_sota()
             if delta < eps:
                 # convergence
+                print(f"\rConvergence reached in {i+1} iterations with delta {delta}")
                 break
         
         return self.sota_matrix
@@ -315,9 +337,15 @@ class SingleIterationSOTASolver(SOTA):
         Updates the SOTA matrix for L iterations, where L is the maximum number of steps
         that can be taken within the time budget.
         """
+        print(f"Solving SOTA with Single Iteration... (Discretizing by Delta t = {self.min_edge})")
+
         # loop over all iterations
         for k in range(1, self.num_cols):
+            print(f"\rComputing SOTA..., progress: {k/self.num_cols*100:.2f}%", end="")
+
             self.update_sota(k)
+        
+        print("\rSOTA computation with Single Iteration completed.", end="\n")
 
     def extract_path(self, node_s):
         return super().extract_path(node_s)

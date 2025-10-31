@@ -16,15 +16,14 @@ sys.path.append(os.path.abspath("./graph"))
 from Grid_network_and_Gamma_distribution import Matrix
 
 def main():
-    matrix = Matrix(10, 10, link_var_max=0.5)
+    matrix = Matrix(3, 3)
     adj_matrix, var_matrix = matrix.compute_matrices()
 
     graph = StochasticGraph(adj_matrix, var_matrix)
-    d = Dijkstra(adj_matrix)
-    f = detArcFlags(graph, d, 20)
-    f.arcflags_computation()
-    f.arcflags_pruning()
-    f.print_graph_sections()
+    s = SingleIterationSOTASolver(graph, 4, 20)
+    s.solve()
+    print(s.get_sota_matrix()[:, -1])
+    graph.print_graph()
 
 if __name__ == "__main__":
     main()
