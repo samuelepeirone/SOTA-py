@@ -249,8 +249,8 @@ class ArcFlags(ABC):
         for edge, flags in self.arc_flags.items():
             print(f"Edge {edge}: {flags}")
     
-    def print_graph_sections(self, path=None, show_edge_labels=True):
-        self.graph.print_graph_sections(self.regions, path, show_edge_labels=show_edge_labels)
+    def print_graph_sections(self, path=None, show_edge_labels=True, show_node_labels=True):
+        self.graph.print_graph_sections(self.regions, path, show_edge_labels=show_edge_labels, show_node_labels=show_node_labels)
 
     def initialize_arcflags(self):
         self.arc_flags = {e: {r: False for r in range(self.num_regions)} for e in self.graph.get_edges()}

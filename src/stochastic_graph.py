@@ -66,7 +66,7 @@ class StochasticGraph:
         nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
         plt.show()
 
-    def print_graph(self, path=None, grid_shape=None, show_edge_labels=True):
+    def print_graph(self, path=None, grid_shape=None, show_edge_labels=True, show_node_labels=True):
         """
         Dislaying the graph without isolated nodes. Nodes without incoming or outgoing edges are ignored.
         If a path is specified (as a list of nodes), it will be displayed
@@ -95,8 +95,9 @@ class StochasticGraph:
             pos[node] = (c, -r)  # c -> x, -r -> y
 
         # drawing
+        node_size = 300 if show_node_labels else 50
         nx.draw(G, {node: pos[node] for node in active_nodes},
-                with_labels=True, node_color='lightblue', edge_color='gray', arrows=True)
+                with_labels=show_node_labels, node_color='lightblue', edge_color='gray', arrows=True, node_size=node_size)
 
         # Edge labels
         if show_edge_labels:
@@ -119,13 +120,14 @@ class StochasticGraph:
                 G,
                 pos={node: pos[node] for node in active_nodes},
                 nodelist=path,
-                node_color='orange'
+                node_color='orange',
+                node_size=node_size
             )
 
         plt.axis('equal')
         plt.show()
 
-    def print_graph_sections(self, node_sections=None, path=None, show_edge_labels=True):
+    def print_graph_sections(self, node_sections=None, path=None, show_edge_labels=True, show_node_labels=True):
         """
         Displaying the graph with nodes colored based on their sections if provided.
         If a path is specified (as a list of nodes), it will be displayed
@@ -160,13 +162,15 @@ class StochasticGraph:
             node_colors = 'lightblue'
 
         # === drawing base graph ===
+        node_size = 300 if show_node_labels else 50
         nx.draw(
             G,
             {n: pos[n] for n in G.nodes()},
-            with_labels=True,
+            with_labels=show_node_labels,
             node_color=node_colors,
             edge_color='gray',
-            arrows=True
+            arrows=True,
+            node_size=node_size
         )
 
         # weights
@@ -205,7 +209,7 @@ class StochasticGraph:
                 node_color='none',
                 edgecolors='orange',
                 linewidths=2.5,
-                node_size=440
+                node_size=node_size
             )
 
             # Secondo strato: colore originale della sezione
@@ -221,7 +225,8 @@ class StochasticGraph:
                 G,
                 pos=pos_active,
                 nodelist=path,
-                node_color=path_colors
+                node_color=path_colors,
+                node_size=node_size
             )
 
         plt.axis('equal')
@@ -281,6 +286,12 @@ class StochasticGraph:
     
     def get_num_nodes(self):
         return self.num_nodes
+    
+    def get_adjacency_matrix(self):
+        return self.adjacency_matrix
+    
+    def get_variance_matrix(self):
+        return self.variance_matrix
     
     def get_adjacency_matrix_value(self, i, j):
         return self.adjacency_matrix[i][j]

@@ -5,15 +5,17 @@ from preprocessing import detReach, detArcFlags
 from deterministic_algorithms import Dijkstra
 import pickle
 import os
+import copy
+import numpy as np
 
 class TestFunctions:
     """
     Defining test functions that can be used as a run for all algorithms
     """
     @staticmethod
-    def run_standard_sota_from_graph(graph, destination_node, time_budget, eps=1e-4, max_iter=100, delta_t=None, print_results=True):
+    def run_standard_sota(graph, destination_node, time_budget, eps=1e-4, max_iter=100, delta_t=None, print_results=True):
         """
-        Basic run of Sota solver from a given graph
+        Running Standard SOTA and showing time results.
         """
         s = StandardSOTASolver(graph, destination_node, time_budget)
 
@@ -36,25 +38,12 @@ class TestFunctions:
             print("sota last column:")
             print(s.get_sota_matrix()[:, -1])
 
-        return end-start
-
-    @staticmethod
-    def run_standard_sota(matrix, destination_node, time_budget, eps=1e-4, max_iter=100, delta_t=None, print_results=True):
-        """
-        Running Standard SOTA and showing time results.
-        """
-        # retrieving matrices and creating graph
-        adj_matrix, var_matrix = matrix.get_matrices()
-        graph = StochasticGraph(adjacency_matrix=adj_matrix, variance_matrix=var_matrix)
-
-        time = TestFunctions.run_standard_sota_from_graph(graph, destination_node, time_budget, eps, max_iter, delta_t, print_results=print_results)
-
-        return time
+        return end-start, s.get_policy_matrix(), s.get_sota_matrix()
     
     @staticmethod
-    def run_single_iteration_sota_from_graph(graph, destination_node, time_budget, delta_t=None, print_results=True):
+    def run_single_iteration_sota(graph, destination_node, time_budget, delta_t=None, print_results=True):
         """
-        Basic run of Single Iteration Sota solver from a given graph
+        Running Single Iteration SOTA and showing time results.
         """
         s = SingleIterationSOTASolver(graph, destination_node, time_budget)
 
@@ -77,29 +66,16 @@ class TestFunctions:
             print("sota last column:")
             print(s.get_sota_matrix()[:, -1])
 
-        return end-start
-    
-    @staticmethod
-    def run_single_iteration_sota(matrix, destination_node, time_budget, delta_t=None, print_results=True):
-        """
-        Running Single Iteration SOTA and showing time results.
-        """
-        adj_matrix, var_matrix = matrix.get_matrices()
-        graph = StochasticGraph(adjacency_matrix=adj_matrix, variance_matrix=var_matrix)
-        
-        time = TestFunctions.run_single_iteration_sota_from_graph(graph, destination_node, time_budget, delta_t, print_results=print_results)
-
-        return time
+        return end-start, s.get_policy_matrix(), s.get_sota_matrix()
         
 
-    def run_reach(matrix, destination_node, time_budget, eps=1e-4, max_iter=100, delta_t=None, print_pruned_graph=False, show_edge_labels=True, print_results=True, print_summary=False):
+    def run_reach(graph, destination_node, time_budget, eps=1e-4, max_iter=100, delta_t=None, print_pruned_graph=False, show_edge_labels=True, show_node_labels=True, print_results=True, print_summary=False):
         """
         Running reach pruning and showing time results.
 
         Return the triple (reach_time, standard_sota_time, single_iteration_sota_time)
         """
-        adj_matrix, var_matrix = matrix.get_matrices()
-        graph = StochasticGraph(adjacency_matrix=adj_matrix, variance_matrix=var_matrix)
+        adj_matrix = graph.get_adjacency_matrix()
         d = Dijkstra(adj_matrix)
         r = detReach(graph, d, destination_node)
 
@@ -114,15 +90,15 @@ class TestFunctions:
 
         if print_pruned_graph:
             print("Graph after reach pruning:")
-            graph.print_graph(show_edge_labels=show_edge_labels)
+            graph.print_graph(show_edge_labels=show_edge_labels, show_node_labels=show_node_labels)
 
         if print_results:
             print("\n------- STANDARD SOTA on Reach-pruned graph ---------\n")
-        standard_sota_time = TestFunctions.run_standard_sota_from_graph(graph, destination_node, time_budget, eps, max_iter, delta_t, print_results=print_results)
+        standard_sota_time, ss_policy_matrix, ss_sota_matrix = TestFunctions.run_standard_sota(graph, destination_node, time_budget, eps, max_iter, delta_t, print_results=print_results)
         
         if print_results:
             print("\n--- SINGLE ITERATION SOTA on Reach-pruned graph -----\n")
-        single_iteration_sota_time = TestFunctions.run_single_iteration_sota_from_graph(graph, destination_node, time_budget, delta_t, print_results=print_results)
+        single_iteration_sota_time, si_policy_matrix, si_sota_matrix = TestFunctions.run_single_iteration_sota(graph, destination_node, time_budget, delta_t, print_results=print_results)
         
         if print_results:
             print(f"\nStandard SOTA policy computed in {standard_sota_time:.4f} seconds")
@@ -137,17 +113,16 @@ class TestFunctions:
 
             print(f"reach+ss: {standard_sota_time+reach_time:.2f}s;    reach+si: {single_iteration_sota_time+reach_time:.2f}s")
 
-        return reach_time, standard_sota_time + reach_time, single_iteration_sota_time + reach_time
+        return reach_time, standard_sota_time + reach_time, single_iteration_sota_time + reach_time, ss_policy_matrix, ss_sota_matrix, si_policy_matrix, si_sota_matrix
 
     @staticmethod
-    def run_arcflags(matrix, destination_node, time_budget, eps=1e-4, max_iter=100, delta_t=None, print_pruned_graph=False, show_edge_labels=True, print_results=True, print_summary=False):
+    def run_arcflags(graph, destination_node, time_budget, eps=1e-4, max_iter=100, delta_t=None, print_pruned_graph=False, show_edge_labels=True, show_node_labels=True, print_results=True, print_summary=False):
         """
         Running arcflags pruning and showing time results.
 
         Return the triple (arcflags_time, standard_sota_time, single_iteration_sota_time)
         """
-        adj_matrix, var_matrix = matrix.get_matrices()
-        graph = StochasticGraph(adjacency_matrix=adj_matrix, variance_matrix=var_matrix)
+        adj_matrix = graph.get_adjacency_matrix()
         d = Dijkstra(adj_matrix)
         f = detArcFlags(graph, d, destination_node)
 
@@ -162,15 +137,15 @@ class TestFunctions:
 
         if print_pruned_graph:
             print("Graph after arcflags pruning:")
-            f.print_graph_sections(show_edge_labels=show_edge_labels)
+            f.print_graph_sections(show_edge_labels=show_edge_labels, show_node_labels=show_node_labels)
 
         if print_results:
             print("\n------- STANDARD SOTA on Arcflags-pruned graph ---------\n")
-        standard_sota_time = TestFunctions.run_standard_sota_from_graph(graph, destination_node, time_budget, eps, max_iter, delta_t, print_results=print_results)
+        standard_sota_time, ss_policy_matrix, ss_sota_matrix = TestFunctions.run_standard_sota(graph, destination_node, time_budget, eps, max_iter, delta_t, print_results=print_results)
 
         if print_results:
             print("\n---- SINGLE ITERATION SOTA on Arcflags-pruned graph ----\n")
-        single_iteration_sota_time = TestFunctions.run_single_iteration_sota_from_graph(graph, destination_node, time_budget, delta_t, print_results=print_results)
+        single_iteration_sota_time, si_policy_matrix, si_sota_matrix = TestFunctions.run_single_iteration_sota(graph, destination_node, time_budget, delta_t, print_results=print_results)
     
         if print_results:
             print(f"Standard SOTA policy computed in {standard_sota_time:.4f} seconds")
@@ -185,50 +160,121 @@ class TestFunctions:
 
             print(f"af+ss: {standard_sota_time+af_time:.2f}s;    af+si: {single_iteration_sota_time+af_time:.2f}s")
             
-        return af_time, standard_sota_time + af_time, single_iteration_sota_time + af_time
+        return af_time, standard_sota_time + af_time, single_iteration_sota_time + af_time, ss_policy_matrix, ss_sota_matrix, si_policy_matrix, si_sota_matrix
 
     @staticmethod
-    def general_comparison_run(matrix, destination_node, time_budget, eps=1e-4, max_iter=100, delta_t=None, print_graph=False, print_all_graphs=False, show_edge_labels=True, print_iterm_results=True):
+    def general_comparison_run(graph, destination_node, time_budget, eps=1e-4, max_iter=100, delta_t=None, print_graph=False, print_all_graphs=False, show_edge_labels=True, show_node_labels=True, print_iterm_results=True):
         """
         Printing results for all algorithms
         """
         if print_graph:
-            adj_matrix, var_matrix = matrix.get_matrices()
-            graph = StochasticGraph(adjacency_matrix=adj_matrix, variance_matrix=var_matrix)
-
-            graph.print_graph(show_edge_labels=show_edge_labels)
+            graph.print_graph(show_edge_labels=show_edge_labels, show_node_labels=show_node_labels)
 
         if print_iterm_results:
             print("\n======== STANDARD SOTA ========\n")
 
-        ss = TestFunctions.run_standard_sota(matrix, destination_node, time_budget, eps, max_iter, delta_t, print_results=print_iterm_results)
+        ss, ss_policy, ss_sota = TestFunctions.run_standard_sota(graph, destination_node, time_budget, eps, max_iter, delta_t, print_results=print_iterm_results)
 
         if print_iterm_results:
             print("\n==== SINGLE ITERATION SOTA ====\n")
 
-        si = TestFunctions.run_single_iteration_sota(matrix, destination_node, time_budget, delta_t, print_results=print_iterm_results)
+        si, si_policy, si_sota = TestFunctions.run_single_iteration_sota(graph, destination_node, time_budget, delta_t, print_results=print_iterm_results)
 
         if print_iterm_results:
             print("\n============ REACH ============\n")
 
-        _, reach_ss, reach_si = TestFunctions.run_reach(matrix, destination_node, time_budget, eps, max_iter, delta_t, print_pruned_graph=print_all_graphs, show_edge_labels=show_edge_labels, print_results=print_iterm_results)
+        g_reach = copy.deepcopy(graph)
+        _, reach_ss, reach_si, reach_ss_policy, reach_ss_sota, reach_si_policy, reach_si_sota = TestFunctions.run_reach(g_reach, destination_node, time_budget, eps, max_iter, delta_t, print_pruned_graph=print_all_graphs, show_edge_labels=show_edge_labels, show_node_labels=show_node_labels, print_results=print_iterm_results)
         
         if print_iterm_results:
             print("\n========== ARCFLAGS ===========\n")
 
-        _, af_ss, af_si = TestFunctions.run_arcflags(matrix, destination_node, time_budget, eps, max_iter, delta_t, print_pruned_graph=print_all_graphs, show_edge_labels=show_edge_labels, print_results=print_iterm_results)
+        g_arcflags = copy.deepcopy(graph)
+        _, af_ss, af_si, af_ss_policy, af_ss_sota, af_si_policy, af_si_sota = TestFunctions.run_arcflags(g_arcflags, destination_node, time_budget, eps, max_iter, delta_t, print_pruned_graph=print_all_graphs, show_edge_labels=show_edge_labels, show_node_labels=show_node_labels, print_results=print_iterm_results)
 
         print("\n===============================\n=========== SUMMARY ===========\n===============================\n")
         
         print("\n------------ TIMES ------------\n")
 
-        print(f"ss: {ss:.1f}s\nsi: {si:.2f}s\nreach+ss: {reach_ss:.1f}s;    reach+si: {reach_si:.1f}s\naf+ss: {af_ss:.1f}s;         af+si: {af_si:.1f}s")
+        print(f"ss: {ss:.1f}s\nsi: {si:.1f}s\nreach+ss: {reach_ss:.1f}s;    reach+si: {reach_si:.1f}s\naf+ss: {af_ss:.1f}s;         af+si: {af_si:.1f}s")
 
         print("\n----------- SPEEDUP -----------\n")
 
         print(f"reach+ss: {ss/reach_ss:.2f}x;   reach+si: {si/reach_si:.2f}x\naf+ss: {ss/af_ss:.2f}x;        af+si: {si/af_si:.2f}x")
 
+        print("\n---------- DISTANCES ----------")
+        print("\n----------- policy  -----------\n")
+        print("same elements in policy matrix ratio:")
+        pol_dist_ss_reach = np.mean(ss_policy[:,-1] == reach_ss_policy[:,-1])
+        pol_dist_si_reach = np.mean(si_policy[:,-1] == reach_si_policy[:,-1])
+
+        pol_dist_ss_af = np.mean(ss_policy == af_ss_policy)
+        pol_dist_si_af = np.mean(si_policy == af_si_policy)
+
+        print(f"reach+ss: {pol_dist_ss_reach:.3f};    reach+si: {pol_dist_si_reach:.3f}\naf+ss: {pol_dist_ss_af:.3f};        af+si: {pol_dist_si_af:.3f}")
+
+        print("\n-------- probabilities --------\n")
+        print("distances between probabilities matrices:")
+        dist_ss_reach = np.linalg.norm(ss_sota[:,-1] - reach_ss_sota[:,-1])
+        dist_si_reach = np.linalg.norm(si_sota[:,-1] - reach_si_sota[:,-1])
+
+        dist_ss_af = np.linalg.norm(ss_sota - af_ss_sota, 'fro')
+        dist_si_af = np.linalg.norm(si_sota - af_si_sota, 'fro')
+
+        print(f"reach+ss: {dist_ss_reach:.3f};    reach+si: {dist_si_reach:.3f}\naf+ss: {dist_ss_af:.3f};        af+si: {dist_si_af:.3f}")
+
         print("\a")
+    
+    @staticmethod
+    def arcflags_ss(graph, destination_node, time_budget):
+        d = Dijkstra(graph.get_adjacency_matrix())
+        afsi = detArcFlags(graph, d, destination_node, time_budget)
+        afsi.arcflags_computation()
+        afsi.arcflags_pruning()
+
+        si = StandardSOTASolver(graph, destination_node, time_budget)
+        si.solve()
+        return si, graph
+
+    @staticmethod
+    def arcflags_si(graph, destination_node, time_budget):
+        d = Dijkstra(graph.get_adjacency_matrix())
+        afsi = detArcFlags(graph, d, destination_node, time_budget)
+        afsi.arcflags_computation()
+        afsi.arcflags_pruning()
+
+        si = SingleIterationSOTASolver(graph, destination_node, time_budget)
+        si.solve()
+        return si, graph
+    
+    @staticmethod
+    def single_path_comparison_run(graph1, graph2, solver1, solver2, starting_node, stochastic_sampling=False, print_graph=True, show_edge_labels=True, show_node_labels=True):
+        """
+        given two solvers, it will compare the paths found by the two of them
+        """
+        print(f"====================================\n======== PATH FROM {starting_node} to {solver1.get_destination()} ========\n====================================\n")
+
+        path1 = solver1.extract_path(starting_node, stochastic_sampling = stochastic_sampling)
+        print("\n======== SOLVER 1 PATH ========\n")
+        print(f"path: {path1}")
+
+        if print_graph:
+            graph1.print_graph(path = path1, show_edge_labels=show_edge_labels, show_node_labels=show_node_labels)
+
+        path2 = solver2.extract_path(starting_node, stochastic_sampling=stochastic_sampling)
+        print("\n======== SOLVER 2 PATH ========\n")
+        print(f"path: {path2}")
+        
+        if print_graph:
+            graph2.print_graph(path = path2, show_edge_labels=show_edge_labels, show_node_labels=show_node_labels)
+
+    @staticmethod
+    def paths_comparison_run(graph1, graph2, solver1, solver2, starting_nodes, stochastic_sampling=False, print_graph=True, show_edge_labels=True, show_node_labels=True):
+        """
+        Paths comparison run for different starting nodes
+        """
+        for starting_node in starting_nodes:
+            TestFunctions.single_path_comparison_run(graph1, graph2, solver1, solver2, starting_node, stochastic_sampling=stochastic_sampling, print_graph=print_graph, show_edge_labels=show_edge_labels, show_node_labels=show_node_labels)
 
 class Utils:
     @staticmethod

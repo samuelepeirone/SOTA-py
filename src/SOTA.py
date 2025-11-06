@@ -124,7 +124,15 @@ class SOTA(ABC):
 
         # we transform time into discretized index
         for s_step in range(1, self.num_cols + 1):
-            s_time = s_step * self.min_edge  # corresponding real time
+            # right endpoint rule
+            #s_time = s_step * self.min_edge  # corresponding real time
+
+            # left endpoint rule
+            #s_time = (s_step - 1) * self.min_edge
+
+            # midpoint rule
+            s_time = (s_step - 0.5) * self.min_edge
+            
             p = self.compute_density(node_i, node_j, s_time)
 
             # u_j(t-omega)
@@ -133,10 +141,8 @@ class SOTA(ABC):
             if 0 <= matrix_col < self.num_cols:
                 m += p * matrix[int(node_j), int(matrix_col)] * self.min_edge
 
-            # clip bound
-            if m > 1.0:
-                m = 1.0
-                break
+                if matrix[int(node_j), int(matrix_col)] > 1:
+                    print(matrix[int(node_j), int(matrix_col)])
 
         return m
 
@@ -152,46 +158,48 @@ class SOTA(ABC):
     def solve(self, eps=1e-4, max_iter=100):
         pass
 
-    def extract_path_from_time(self, start_node, t_idx):
+    def extract_path_from_time(self, start_node, t_idx, stochastic_sampling=False):
         """
-        Extracts the optimal path for time-index watching the policy row.
-        It stops if we get to destination, we get to a node -1.
-        @return: list of nodes representing the optimal path from source to destination
+        Computing next best node taking into account residual time
         """
         path = [start_node]
         current = start_node
-
-        max_steps = self.num_nodes*2
         steps = 0
 
-        policy = self.policy_matrix[:, t_idx]
-
         while True:
-            # retrieving the next node
-            next_node = policy[current]
+            next_node = self.policy_matrix[current, t_idx]
 
-            # stop if next = -1 or destination
+            # not reachable or destination
             if next_node == -1 or current == self.node_d:
                 break
 
             path.append(int(next_node))
-            current = next_node
 
+            # travel time
+            if stochastic_sampling:
+                s = self.graph.sample_distance(current, next_node)
+            else:
+                s = self.graph.get_adjacency_matrix_value(current, next_node)
+
+            # Consume one time bucket
+            t_idx = max(0, t_idx - int(round(s / self.min_edge)))
+
+            current = int(next_node)
             steps += 1
 
-            if steps > max_steps:
-                print("[Warning]A loop in the policy matrix was detected")
+            if steps > self.num_nodes * 2:
+                print("[Warning] Loop in policy — value plateau or DP issue]")
                 break
 
         return path
 
     @abstractmethod
-    def extract_path(self, start_node):
+    def extract_path(self, start_node, stochastic_sampling = False):
         """
         Extracts the optimal path using only the policy row and the last column.
         @return: list of nodes representing the optimal path from source to destination
         """
-        return self.extract_path_from_time(start_node, self.num_cols-1)
+        return self.extract_path_from_time(start_node, self.num_cols-1, stochastic_sampling=stochastic_sampling)
 
 class StandardSOTASolver(SOTA):
     """
@@ -228,6 +236,10 @@ class StandardSOTASolver(SOTA):
                 if conv > max_val:
                     max_val = conv
                     best_successor = j
+
+            # clipping bound
+            if max_val > 1.0:
+                max_val = 1.0
 
             self.sota_matrix[node_i, t_idx-1] = max_val
             self.policy_matrix[node_i, t_idx-1] = best_successor
@@ -268,8 +280,8 @@ class StandardSOTASolver(SOTA):
         
         return self.sota_matrix
     
-    def extract_path(self, node_s):
-        return super().extract_path(node_s)
+    def extract_path(self, node_s, stochastic_sampling=False):
+        return super().extract_path(node_s, stochastic_sampling=stochastic_sampling)
     
 class SingleIterationSOTASolver(SOTA):
     def __init__(self, graph, node_d, time_budget):
@@ -292,6 +304,10 @@ class SingleIterationSOTASolver(SOTA):
             if m > max_value:
                 max_value = m
                 best_successor = node_j
+        
+        # clipping bound
+        if max_value > 1.0:
+            max_value = 1.0
         
         # updating the sota_matrix and policy_matrix for node_i
         t_idx = math.floor(t / self.min_edge)
@@ -347,5 +363,5 @@ class SingleIterationSOTASolver(SOTA):
         
         print("\rSOTA computation with Single Iteration completed.", end="\n")
 
-    def extract_path(self, node_s):
-        return super().extract_path(node_s)
+    def extract_path(self, node_s, stochastic_sampling=False):
+        return super().extract_path(node_s, stochastic_sampling=stochastic_sampling)
