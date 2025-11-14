@@ -269,7 +269,16 @@ class StochasticGraph:
         """
         Returns the list of nodes in the graph
         """
-        return list(range(self.num_nodes))
+        active_nodes = []
+
+        for i in range(self.num_nodes):
+            has_outgoing = np.any(self.adjacency_matrix[i, :] > 0)
+            has_incoming = np.any(self.adjacency_matrix[:, i] > 0)
+
+            if has_outgoing or has_incoming:
+                active_nodes.append(i)
+
+        return active_nodes
 
     def get_edges(self):
         """
@@ -319,10 +328,24 @@ class StochasticGraph:
         by checking the adjacency matrix.
         """
         successors = []
+
         for j in range(self.adjacency_matrix.shape[1]):
             if self.adjacency_matrix[node, j] > 0:
                 successors.append(j)
+        
         return successors
+    
+    def reverse(self):
+        """
+        Returns a new StochasticGraph where all edges are reversed.
+        (Adjacency and variance matrix inverted)
+        """
+        reversed_adj = self.adjacency_matrix.T.copy()
+        reversed_var = self.variance_matrix.T.copy()
+
+        reversed_graph = StochasticGraph(reversed_adj, reversed_var)
+
+        return reversed_graph
         
     def prune_node(self, node):
         """

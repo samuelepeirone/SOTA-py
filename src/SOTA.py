@@ -201,6 +201,47 @@ class SOTA(ABC):
         """
         return self.extract_path_from_time(start_node, self.num_cols-1, stochastic_sampling=stochastic_sampling)
 
+    @staticmethod
+    def extract_path_from_policy(node_s, node_d, policy_matrix, graph, stochastic_sampling=False):
+        """
+        Extracting path from s to d from a given policy matrix
+        """
+        min_edge = graph.get_min_edge()
+        num_nodes = graph.get_num_nodes()
+
+        path = [node_s]
+        current = node_s
+        steps = 0
+
+        t_idx = policy_matrix.shape[1]-1
+
+        while True:
+            next_node = policy_matrix[current, t_idx]
+
+            # not reachable or destination
+            if next_node == -1 or current == node_d:
+                break
+
+            path.append(int(next_node))
+
+            # travel time
+            if stochastic_sampling:
+                s = graph.sample_distance(current, next_node)
+            else:
+                s = graph.get_adjacency_matrix_value(current, next_node)
+
+            # Consume one time bucket
+            t_idx = max(0, t_idx - int(round(s / min_edge)))
+
+            current = int(next_node)
+            steps += 1
+
+            if steps > num_nodes * 2:
+                print("[Warning] Loop in policy — value plateau or DP issue]")
+                break
+
+        return path
+
 class StandardSOTASolver(SOTA):
     """
     Solving SOTA problem with successive approximations approach.
@@ -208,10 +249,13 @@ class StandardSOTASolver(SOTA):
     def __init__(self, graph, node_d, time_budget):
         super().__init__(graph, node_d, time_budget)
 
-    def compute_convolution(self, node_i, node_j, t):
-        return super().compute_convolution(node_i, node_j, t, self.sota_matrix)
+    def compute_convolution(self, node_i, node_j, t, matrix=None):
+        if matrix is None:
+            matrix = self.sota_matrix
 
-    def update_node(self, node_i):
+        return super().compute_convolution(node_i, node_j, t, matrix)
+
+    def update_node(self, node_i, matrix):
         """
         Update the row of the SOTA matrix corresponding to node_i
         for all times from 1 to time budget, using compute_convolution function.
@@ -232,7 +276,7 @@ class StandardSOTASolver(SOTA):
             successors = self.graph.get_successor_nodes(node_i)  # finds the successors of node_i
 
             for j in successors:
-                conv = self.compute_convolution(node_i, j, t)
+                conv = self.compute_convolution(node_i, j, t, matrix)
                 if conv > max_val:
                     max_val = conv
                     best_successor = j
@@ -252,7 +296,7 @@ class StandardSOTASolver(SOTA):
         old_matrix = self.sota_matrix.copy()  # copy of the current SOTA matrix
         
         for node in range(self.num_nodes):
-            self.update_node(node)
+            self.update_node(node, old_matrix)
         
         # compute the norm of the difference between old and new matrix
         norm = np.sum(np.abs(self.sota_matrix - old_matrix))

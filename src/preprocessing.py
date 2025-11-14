@@ -11,19 +11,16 @@ class Reach(ABC):
     whose sources or destinations are close to the node; large reach for shortest 
     paths involving distante sources and destinations.
     """
-    def __init__(self, graph, node_s, node_d):
+    def __init__(self, graph):
         self.graph = graph
         self.num_nodes = graph.get_num_nodes()
         self.min_edge = graph.get_min_edge()
         # array of reach values; initializing all reach values to zero
         self.reach_values = np.zeros(self.num_nodes)
-        # m_id and m_si cache, as they are used multiple times
-        self.m_id_cache = {}    # key: dest_node, value: array m(id)
-        self.m_si_cache = {}    # key: (s,i), value: m(s,i)
-        # source and destination nodes -> to protect them from pruning
-        self.node_d = node_d
-        self.node_s = node_s
         self.visited_nodes = {} # dictionary
+        # cache for dijkstra results
+        self.pred_s_cache = None
+        self.dist_s_cache = None
 
     def get_reach_values(self):
         return self.reach_values
@@ -50,61 +47,8 @@ class Reach(ABC):
         pass
 
     @abstractmethod
-    def reach_pruning(self):
-        """
-        Pruning if r(i,T) < min(m(s,i), m(i,d)). We use the cached values to avoid
-        recomputing m(s,i) and m(i,d), as we computed them in reach_computation function.
-        """
-        print("\rPruning nodes...", end="")
-
-        pruned_nodes = set()
-
-        nodes = self.graph.get_nodes()
-        
-        for d in nodes:
-            # retrieving m_id for all nodes i
-            m_id = self.m_id_cache.get(d)
-            # if not cached, compute it
-            if m_id is None:
-                m_id = [self.m(i, d) for i in nodes]
-                self.m_id_cache[d] = m_id
-
-            for s in nodes:
-                if s == d:
-                    continue
-
-                visited_nodes = self.visited_nodes.get((s, d), [])
-                #print(visited_nodes)
-                
-                for i in nodes:
-                    # don't prune the start or destination node
-                    if i == self.node_d or i == self.node_s:
-                        continue
-
-                    if i == s or i == d:
-                        continue
-
-                    if (s, i) in self.m_si_cache:
-                        m_si = self.m_si_cache[(s, i)]
-                    else:
-                        m_si = self.m(s, i)
-                        self.m_si_cache[(s, i)] = m_si
-
-                    #print(f"RV: {self.reach_values[i]}, SI: {m_si}, ID: {m_id[i]}")
-                    
-                    if np.isinf(m_si) or np.isinf(m_id[i]):
-                        continue
-
-                    if self.reach_values[i] < min(m_si, m_id[i]):
-                        self.graph.prune_node(i)
-                        #print(f"Node {i} pruned")
-                        pruned_nodes.add(i)
-        
-        print(f"\rPruned {len(pruned_nodes)} nodes: {pruned_nodes}", end="\n")
-        return pruned_nodes
-
-    def reach_test(self):
-        print(self.visited_nodes)
+    def reach_pruning(self, node_s, node_d):
+        pass
 
 class bfReach(Reach):
     """
@@ -177,63 +121,89 @@ class bfReach(Reach):
         print("\rReach values computed", end="\n")
         return self.reach_values
 
-    def reach_pruning(self):
-        return super().reach_pruning()
+    def reach_pruning(self, node_s, node_d):
+        return super().reach_pruning(node_s, node_d)
 
 class detReach(Reach):
-    def __init__(self, graph, DetAlgorithm, node_d, node_s=None):
-        super().__init__(graph, node_s, node_d)
+    def __init__(self, graph, DetAlgorithm):
+        super().__init__(graph)
         self.DetAlgorithm = DetAlgorithm
-        self.node_d = node_d
 
-    def reach_computation(self):
+    def reach_computation(self, s_node=None):
         """
-        Computing reach values using a deterministic algorithm
+        Computing reach values using a deterministic algorithm. If a starting node is passed, the two
+        dictionaries of predecessors and distances will be memorized to not recompute dijkstra for pruning phase.
         """
         print("\rComputing reach values...", end="")
-        # reset reach values and caches
+        # initialization
         self.reach_values = np.zeros(self.num_nodes)
-        self.m_id_cache.clear()
-        self.m_si_cache.clear()
 
         nodes = self.graph.get_nodes()
 
         for s in nodes:
             # computing optimal predecessors and distances from source s to all destinations s
-            pred_s = self.DetAlgorithm.compute_path(s)
+            pred_s, dist_s = self.DetAlgorithm.compute_path(s)
 
-            m_si = [self.m(s,i) for i in nodes]
-            self.m_si_cache[s] = m_si
+            # memorizing in cache
+            if s_node and s_node == s:
+                self.pred_s_cache = pred_s
+                self.dist_s_cache = dist_s
+
+            # remember that: m_si = dist_s[i]
 
             for d in nodes:
                 if s == d:
                     continue
-                    
+                
                 # getting the set of nodes in optimal paths from s to d
                 opt_paths = self.DetAlgorithm.get_all_optimal_paths(pred_s, d)
                 visited_nodes = self.DetAlgorithm.get_nodes_from_optimal_paths(opt_paths)
-                
-                self.visited_nodes[(s, d)] = visited_nodes
 
-                # updating the reach values for each visited node
                 for i in visited_nodes:
-                    if (i, d) in self.m_id_cache:
-                        m_id = self.m_id_cache[(i, d)]
-                    else:
-                        m_id = self.m(i, d)
-                        self.m_id_cache[(i, d)] = m_id
-                    
+                    m_si = dist_s[i]
+                    m_sd = dist_s[d]
+
+                    # remember that, in this specific case, m_id = m_sd - m_si
+                    m_id = m_sd - m_si
+
                     # if a path doesn't exist, the reach is not updated
-                    if np.isinf(m_id) or np.isinf(m_si[i]):
+                    if np.isinf(m_id) or np.isinf(m_si):
                         continue
 
-                    self.reach_values[i] = max(self.reach_values[i], min(m_si[i], m_id))
+                    # updating reach structure
+                    self.reach_values[i] = max(self.reach_values[i], min(m_si, m_id))
 
         print("\rReach values computed", end="\n")
         return self.reach_values
 
-    def reach_pruning(self):
-        return super().reach_pruning()
+    def reach_pruning(self, node_s, node_d):
+        """
+        Pruning if r(i) < min(m(s,i), m(i,d)), given s and d nodes.
+        """
+        print("\rPruning nodes...", end="")
+
+        pruned_nodes = set()
+
+        # retrieving from cache
+        if self.pred_s_cache or self.dist_s_cache:
+            dist_s = self.dist_s_cache
+        else:
+            _, dist_s = self.DetAlgorithm.compute_path(node_s)
+        
+        # computing all distances between i and d with invert set as True
+        _, dist_d = self.DetAlgorithm.compute_path(node_d, invert=True)
+
+        nodes = self.graph.get_nodes()
+
+        for i in nodes:
+            m_si = dist_s[i]
+            m_id = dist_d[i]
+
+            if self.reach_values[i] < min(m_si, m_id):
+                self.graph.prune_node(i)
+                pruned_nodes.add(i)
+        
+        return pruned_nodes
 
 class ArcFlags(ABC):
     def __init__(self, graph, node_s, node_d):
@@ -373,7 +343,7 @@ class ArcFlags(ABC):
 
         # using kmeans with canopy-found centroids
         labels, _ = self.canopy_kmeans(X_scaled, canopies, centers)
-
+        
         self.regions = {i: int(labels[i]) for i in range(self.graph.get_num_nodes())}
 
         return self.regions
@@ -508,7 +478,7 @@ class detArcFlags(ArcFlags):
         nodes = self.graph.get_nodes()
 
         for s in nodes:
-            pred_s = self.DetAlgorithm.compute_path(s)
+            pred_s, dist_s = self.DetAlgorithm.compute_path(s)
 
             for d in nodes:
                 if s == d:
@@ -527,7 +497,7 @@ class detArcFlags(ArcFlags):
 
         print(f"\rArcflags computed!", end="\n")
 
-        return self.arc_flags           
+        return self.arc_flags    
 
     def arcflags_pruning(self):
         return super().arcflags_pruning()

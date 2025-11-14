@@ -24,13 +24,21 @@ class Dijkstra:
         
         return self.G
 
-    def compute_path(self, start_node):
+    def compute_path(self, start_node, invert=False):
         """
         Computes the optimal path from start node to every other node, with Dijkstra algorithm. 
+        With invert set to False, we compute a path from a source node to all the others, with
+        True the opposite we compute to all the nodes to a destination.
         """
-        # return the list of predecessors for each node, given a source
-        pred, dist = nx.dijkstra_predecessor_and_distance(self.G, source=start_node)
-        return pred
+        if invert == False:
+            # computing from source to all destinations
+            pred, dist = nx.dijkstra_predecessor_and_distance(self.G, source=start_node)
+        else:
+            # computing from destination to all sources, by inverting the graph
+            revG = self.G.reverse(copy=True)
+            pred, dist = nx.dijkstra_predecessor_and_distance(revG, source=start_node)
+        
+        return pred, dist
     
     def get_all_optimal_paths(self, predecessors, dest_node):
         """
