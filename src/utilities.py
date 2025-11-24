@@ -7,7 +7,6 @@ import pickle
 import os
 import copy
 import numpy as np
-from stdnum.util import lcs
 
 class TestFunctions:
     """
