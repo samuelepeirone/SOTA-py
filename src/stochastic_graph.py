@@ -267,7 +267,7 @@ class StochasticGraph:
 
     def get_nodes(self):
         """
-        Returns the list of nodes in the graph
+        Returns the list of active nodes in the graph.
         """
         active_nodes = []
 
