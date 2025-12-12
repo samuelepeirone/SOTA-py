@@ -1,8 +1,11 @@
 import numpy as np
 import time
 from abc import ABC, abstractmethod
+import copy
 
 from sklearn.preprocessing import MinMaxScaler
+
+from stochastic_graph import StochasticGraph
 
 class Reach(ABC):
     """
@@ -15,12 +18,17 @@ class Reach(ABC):
         self.graph = graph
         self.num_nodes = graph.get_num_nodes()
         self.min_edge = graph.get_min_edge()
+        
         # array of reach values; initializing all reach values to zero
         self.reach_values = np.zeros(self.num_nodes)
         self.visited_nodes = {} # dictionary
+        
         # cache for dijkstra results
         self.pred_s_cache = None
         self.dist_s_cache = None
+
+        # backup of graph for reset
+        self.backup_graph = copy.deepcopy(graph)
 
     def get_reach_values(self):
         return self.reach_values
@@ -49,6 +57,15 @@ class Reach(ABC):
     @abstractmethod
     def reach_pruning(self, node_s, node_d):
         pass
+
+    def reset_graph(self):
+        """
+        Resets the graph to its original state before pruning using the backup graph.
+        """
+        self.graph = self.backup_graph
+    
+    def print_graph(self):
+        self.graph.print_graph()
 
 class bfReach(Reach):
     """
