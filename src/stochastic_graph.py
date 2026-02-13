@@ -247,13 +247,22 @@ class StochasticGraph:
     def sample_distance(self, node1, node2):
         """
         Returns a sampled distance between node1 and node2
-        using a gamma distribution with mean from adjacency_matrix and variance from variance_matrix.
+        using a gamma distribution with mean from adjacency_matrix 
+        and variance from variance_matrix.
+        - If variance is 0, returns the mean (deterministic edge)
+        - If variance > 0, samples from gamma distribution
         """
         mean = self.adjacency_matrix[node1, node2]
         var = self.variance_matrix[node1, node2]
-        if mean == 0 or var == 0:
+
+        # no edge, infinite distance
+        if mean == 0:
             return np.inf  # No edge or zero variance
 
+        # variance 0: deterministic edge
+        if var == 0:
+            return mean
+        
         shape = mean**2 / var
         scale = var / mean
         # Ensure the sampled distance is at least min_edge to lower-bound it
@@ -378,3 +387,10 @@ class StochasticGraph:
         self.variance_matrix[node_i, node_j] = 0
 
         self.min_edge = self.find_min_edge()
+
+    def make_deterministic(self):
+        """
+        Modifies the graph to make it deterministic by setting the
+        variance matrix to zero and keeping the adjacency matrix unchanged.
+        """
+        self.variance_matrix = np.zeros_like(self.variance_matrix)
